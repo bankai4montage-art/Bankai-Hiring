@@ -68,7 +68,7 @@
         </div>
         <div class="min-w-0">
           <h1 class="text-white font-extrabold text-lg sm:text-xl tracking-tight truncate">Bankai-Hiring</h1>
-          <p class="text-blue-100 text-[11px] sm:text-xs leading-tight truncate">Courier Hiring Management</p>
+          <p class="text-blue-100 text-[11px] sm:text-xs leading-tight truncate">Courier Hiring Management · <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Live Database</span></p>
         </div>
       </div>
       <!-- Actions -->
@@ -156,6 +156,11 @@
             <!-- Rows are rendered by JS (renderTable) -->
           </tbody>
         </table>
+        <!-- Loading skeleton -->
+        <div id="loadingState" class="px-6 py-14 text-center">
+          <div class="w-10 h-10 rounded-full border-3 border-brand-100 border-t-brand-500 animate-spin mx-auto"></div>
+          <p class="text-sm text-slate-500 mt-3">Loading couriers from database…</p>
+        </div>
       </div>
       <!-- Empty state + result count -->
       <div id="emptyState" class="hidden px-6 py-14 text-center">
@@ -171,7 +176,7 @@
     </section>
 
     <footer class="text-center text-xs text-slate-400 pb-4">
-      Bankai-Hiring · Data is stored locally in your browser (LocalStorage) · Built with HTML5 + Tailwind CSS + Vanilla JS
+      Bankai-Hiring · Data persists in a SQLite database on Railway · Built with HTML5 + Tailwind CSS + Node.js
     </footer>
   </main>
 
@@ -322,26 +327,20 @@
     .field:focus { outline: none; background: #fff; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .25); }
     .field.invalid { border-color: #EF4444; background: #FEF2F2; }
     .err { color: #DC2626; font-size: 0.72rem; margin-top: 0.3rem; font-weight: 500; }
+    .border-3 { border-width: 3px; }
   </style>
 
   <script>
     'use strict';
 
     /* ============================================================
-       Bankai-Hiring — Application Logic (Vanilla JS)
-       Modules:
-         1. Constants & helpers
-         2. State & LocalStorage persistence
-         3. Rendering (summary cards, table, empty state)
-         4. Search & filters
-         5. CRUD (add / edit / delete / quick status change)
-         6. Validation
-         7. Toasts & modals wiring
+       Bankai-Hiring — Frontend Logic (Vanilla JS + REST API)
+       The data lives in a SQLite database on the server; this file
+       talks to it through /api/couriers endpoints.
        ============================================================ */
 
-    /* ------------------------- 1. Constants & helpers ------------------------- */
+    /* ------------------------- Constants & helpers ------------------------- */
 
-    const STORAGE_KEY = 'bankai-hiring:records';
     const STATUS_META = {
       'Active':              { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',    dot: 'bg-emerald-500' },
       'Inactive':            { badge: 'bg-slate-100 text-slate-600 ring-slate-500/20',         dot: 'bg-slate-400' },
@@ -350,7 +349,7 @@
     };
     const STATUSES = Object.keys(STATUS_META);
 
-    const qs  = (sel) => document.querySelector(sel);
+    const qs = (sel) => document.querySelector(sel);
     const esc = (str) => String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const escAttr = esc; // same escaping works inside attributes we control
 
@@ -371,37 +370,39 @@
     /** Licenses expiring within this many days are flagged "expiring soon". */
     const EXPIRY_SOON_DAYS = 30;
 
-    /* ------------------------- 2. State & persistence ------------------------- */
+    /* ------------------------- State & API layer ------------------------- */
 
-    /** Seed data shown on first visit — 4 realistic records (mixed EN/AR names). */
-    const seedRecords = () => ([
-      { id: crypto.randomUUID(), fullName: 'أحمد محمد سعيد',        phone: '01012345678', nationalId: '29901011234567', branch: 'QCD1', employmentType: 'Full Time', licenseStart: '2024-11-01', licenseEnd: '2025-10-31', outlook: 'ahmed.saeed@bankai.com',    plate: 'ABC 123',  status: 'Active' },
-      { id: crypto.randomUUID(), fullName: 'Youssef Khaled',        phone: '01123456789', nationalId: '30005051234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-06-15', licenseEnd: '2026-06-14', outlook: 'youssef.k@bankai.com',     plate: 'XYZ 456',  status: 'Attended to D0' },
-      { id: crypto.randomUUID(), fullName: 'محمود علي حسن',         phone: '01234567890', nationalId: '29803031234567', branch: 'QCD1', employmentType: 'Full Time', licenseStart: '2024-01-10', licenseEnd: '2025-01-09', outlook: 'mahmoud.hassan@bankai.com', plate: 'JKL 789',  status: 'Inactive' },
-      { id: crypto.randomUUID(), fullName: 'Omar Tarek',            phone: '01098765432', nationalId: '30109101234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-09-01', licenseEnd: '2026-09-30', outlook: '',                          plate: 'MNO 321',  status: 'Not Attended to D0' }
-    ]);
-
-    let state = load();
+    let state = [];            // couriers from the server DB
     let deleteTargetId = null;
 
-    function load() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) return JSON.parse(raw);
-      } catch (e) { console.warn('Failed to load saved data:', e); }
-      return seedRecords(); // first run -> demo data
+    /** Tiny REST client with JSON + error propagation. */
+    async function api(path, options = {}) {
+      const res = await fetch('/api' + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = Object.values(body.errors || {})[0] || body.error || `Request failed (${res.status})`;
+        throw { status: res.status, errors: body.errors || null, message: msg };
+      }
+      return body;
     }
 
-    function save() {
+    /** Initial + refresh load from the database. */
+    async function refresh() {
+      qs('#loadingState').classList.remove('hidden');
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (e) {
-        console.error('Failed to persist data:', e);
-        toast('Could not save data — storage unavailable.', 'error');
+        state = await api('/couriers');
+        rerender();
+      } catch (err) {
+        toast(err.message || 'Could not load data from the server.', 'error');
+      } finally {
+        qs('#loadingState').classList.add('hidden');
       }
     }
 
-    /* ------------------------- 3. Rendering ------------------------- */
+    /* ------------------------- Rendering ------------------------- */
 
     /** Small SVG icon markup reused across summary cards. */
     const icon = (path) =>
@@ -462,7 +463,6 @@
     function renderTable() {
       const list = getFiltered();
 
-      // Search & filters wiring once (below), but the render reflects current filters.
       const nameFont = s => isArabic(s) ? 'font-arabic' : '';
 
       qs('#tableBody').innerHTML = list.map(r => `
@@ -516,7 +516,7 @@
           <!-- Actions -->
           <td class="px-4 py-3.5 text-right">
             <div class="inline-flex items-center gap-1">
-              <button type="button" onclick='openModal(${JSON.stringify(r.id)})' title="Edit"
+              <button type="button" onclick='openModal("${r.id}")' title="Edit"
                 class="p-2 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
               </button>
@@ -537,7 +537,7 @@
 
     const rerender = () => { renderSummary(); renderTable(); };
 
-    /* ------------------------- 4. Search & filters ------------------------- */
+    /* ------------------------- Search & filters ------------------------- */
 
     function getFiltered() {
       const q = qs('#searchInput').value.trim().toLowerCase();
@@ -567,10 +567,10 @@
       renderTable();
     });
 
-    /* ------------------------- 5. CRUD ------------------------- */
+    /* ------------------------- CRUD ------------------------- */
 
     /** Open the modal. With `id` -> edit mode (prefill), without -> add mode. */
-    function openModal(id) {
+    async function openModal(id) {
       const form = qs('#courierForm');
       form.reset();
       clearFieldErrors();
@@ -600,42 +600,50 @@
       document.body.style.overflow = '';
     }
 
-    function quickStatus(id, status) {
-      const r = state.find(x => x.id === id);
-      if (!r) return;
-      const prev = r.status;
-      r.status = status;
-      if (!validateRecord(r, { silent: true })) { // status is always valid here, but keep data sane
-        r.status = prev;
-      } else {
-        save();
+    /** Quick status change straight from the table row. */
+    async function quickStatus(id, status) {
+      try {
+        const updated = await api(`/couriers/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        });
+        const idx = state.findIndex(r => r.id === id);
+        if (idx !== -1) state[idx] = updated;
+        rerender();
         toast(`Status updated to "${status}"`, 'success');
+      } catch (err) {
+        toast(err.message, 'error');
+        rerender(); // restore the previous selection
       }
-      rerender();
     }
 
     function askDelete(id) {
       deleteTargetId = id;
       const r = state.find(x => x.id === id);
-      qs('#deleteMsg').textContent = r ? `"${r.fullName}" will be permanently removed. This action cannot be undone.` : 'This record will be permanently removed.';
+      qs('#deleteMsg').textContent = r ? `"${r.fullName}" will be permanently removed from the database. This action cannot be undone.` : 'This record will be permanently removed.';
       qs('#deleteOverlay').classList.remove('hidden');
     }
 
     const closeDelete = () => { deleteTargetId = null; qs('#deleteOverlay').classList.add('hidden'); };
 
-    function confirmDelete() {
+    async function confirmDelete() {
       if (!deleteTargetId) return closeDelete();
-      state = state.filter(r => r.id !== deleteTargetId);
-      save();
+      const id = deleteTargetId;
       closeDelete();
-      toast('Courier record deleted.', 'success');
-      rerender();
+      try {
+        await api(`/couriers/${id}`, { method: 'DELETE' });
+        state = state.filter(r => r.id !== id);
+        rerender();
+        toast('Courier record deleted.', 'success');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
     }
 
-    /** Form submit -> create or update. */
-    qs('#courierForm').addEventListener('submit', (e) => {
+    /** Form submit -> create (POST) or update (PUT) via the API. */
+    qs('#courierForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const data = {
+      const payload = {
         fullName: qs('#f_fullName').value.trim(),
         phone: qs('#f_phone').value.trim(),
         nationalId: qs('#f_nationalId').value.trim(),
@@ -648,7 +656,7 @@
         status: qs('#f_status').value
       };
 
-      const errors = validateRecord(data);
+      const errors = validateRecord(payload);
       if (Object.keys(errors).length) {
         showFieldErrors(errors);
         toast('Please fix the highlighted fields.', 'error');
@@ -656,55 +664,68 @@
       }
 
       const id = qs('#courierId').value;
-      if (id) {
-        const idx = state.findIndex(r => r.id === id);
-        if (idx !== -1) state[idx] = { ...state[idx], ...data };
-        toast('Courier record updated.', 'success');
-      } else {
-        state.push({ id: crypto.randomUUID(), ...data });
-        toast('New courier added.', 'success');
+      const btn = qs('#saveBtn');
+      btn.disabled = true;
+      btn.classList.add('opacity-60');
+
+      try {
+        if (id) {
+          const updated = await api(`/couriers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+          });
+          const idx = state.findIndex(r => r.id === id);
+          if (idx !== -1) state[idx] = updated;
+          toast('Courier record updated.', 'success');
+        } else {
+          const created = await api('/couriers', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+          state.unshift(created);
+          toast('New courier added.', 'success');
+        }
+        closeModal();
+        rerender();
+      } catch (err) {
+        const formErrors = {
+          fullName: 'fullName', phone: 'phone', nationalId: 'nationalId', branch: 'branch',
+          type: 'employmentType' in payload ? 'type' : 'type',
+          licenseStart: 'licenseStart', licenseEnd: 'licenseEnd', outlook: 'outlook', status: 'status'
+        };
+        if (err.errors && err.errors.type) err.errors.type = err.errors.type; // server key "type"
+        // Map server error keys to inputs (server uses: fullName, phone, nationalId, branch, type, licenseStart, licenseEnd, outlook, status)
+        if (err.errors) {
+          showFieldErrors(err.errors);
+        }
+        toast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-60');
       }
-      save();
-      closeModal();
-      rerender();
     });
 
-    /* ------------------------- 6. Validation ------------------------- */
+    /* ------------------------- Client-side validation ------------------------- */
 
-    /**
-     * Validates a courier record.
-     * silent=true -> no UI; returns null when valid, else true (used for quick status).
-     * Returns an object of {field: message} for the form flow.
-     */
-    function validateRecord(d, { silent = false } = {}) {
+    function validateRecord(d) {
       const e = {};
-
       if (!d.fullName) e.fullName = 'Full name is required.';
       else if (d.fullName.length < 3) e.fullName = 'Name must be at least 3 characters.';
-
       if (!d.phone) e.phone = 'Phone number is required.';
       else if (!/^01[0125][0-9]{8}$/.test(d.phone)) e.phone = 'Enter a valid Egyptian mobile number (11 digits).';
-
       if (!d.nationalId) e.nationalId = 'National ID is required.';
       else if (!/^\d{14}$/.test(d.nationalId)) e.nationalId = 'National ID must be exactly 14 digits.';
-
       if (!d.branch) e.branch = 'Select a branch.';
       if (!d.employmentType) e.type = 'Select an employment type.';
-
       if (!d.licenseStart) e.licenseStart = 'License start date is required.';
       if (!d.licenseEnd) e.licenseEnd = 'License end date is required.';
       if (d.licenseStart && d.licenseEnd && d.licenseEnd < d.licenseStart)
         e.licenseEnd = 'End date must be after the start date.';
-
       if (d.outlook && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.outlook)) e.outlook = 'Enter a valid email address.';
-
       if (!d.status) e.status = 'Select a courier status.';
-
-      if (silent) return Object.keys(e).length === 0;
       return e;
     }
 
-    /** Refresh <p class="err"> hints under each input based on the error map. */
     const FIELD_TO_LABEL = { fullName: 'f_fullName', phone: 'f_phone', nationalId: 'f_nationalId', branch: 'f_branch', type: 'f_type', licenseStart: 'f_licenseStart', licenseEnd: 'f_licenseEnd', outlook: 'f_outlook', status: 'f_status' };
 
     function showFieldErrors(errors) {
@@ -723,13 +744,11 @@
       document.querySelectorAll('#courierForm .err').forEach(p => { p.classList.add('hidden'); p.textContent = ''; });
     }
 
-    /* ------------------------- 7. Toasts & keyboard ------------------------- */
+    /* ------------------------- Toasts & keyboard ------------------------- */
 
     /** Show a short-lived toast notification. type: 'success' | 'error' */
     function toast(message, type = 'success') {
-      const palette = {
-        success: 'bg-emerald-600', error: 'bg-red-600'
-      }[type] || 'bg-slate-800';
+      const palette = { success: 'bg-emerald-600', error: 'bg-red-600' }[type] || 'bg-slate-800';
       const el = document.createElement('div');
       el.className = `fade-in flex items-start gap-2.5 ${palette} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-pop`;
       el.setAttribute('role', 'status');
@@ -751,7 +770,7 @@
     });
 
     /* ------------------------- Boot ------------------------- */
-    rerender();
+    refresh();
   </script>
 </body>
 </html>
