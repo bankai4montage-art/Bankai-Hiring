@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bankai-Hiring | Courier Hiring Management</title>
+  <meta name="description" content="Bankai-Hiring — a modern dashboard for managing courier hiring: records, branches, licenses and status tracking." />
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter (Latin) + Cairo (Arabic) for seamless bilingual typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    /* Extend Tailwind with the project's Blue & White design tokens */
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#EFF6FF', 100: '#DBEAFE', 500: '#2563EB',
+              600: '#1E40AF', 700: '#1E3A8A', 900: '#0F172A'
+            },
+            surface: '#F8FAFC',
+            ink: '#0F172A'
+          },
+          fontFamily: {
+            sans: ['Inter', 'Cairo', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            arabic: ['Cairo', 'Inter', 'sans-serif']
+          },
+          boxShadow: {
+            card: '0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.08)',
+            pop: '0 10px 30px rgba(30, 64, 175, 0.18)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Small custom touches that Tailwind utilities don't cover */
+    body { font-family: 'Inter', 'Cairo', sans-serif; }
+    .num { font-variant-numeric: tabular-nums; }              /* stable column width for numbers/IDs */
+    .fade-in { animation: fadeIn .25s ease-out both; }        /* modal entrance */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+    /* Rounded scrollbars for the table area */
+    .table-scroll::-webkit-scrollbar { height: 8px; }
+    .table-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+  </style>
+</head>
+
+<body class="bg-surface text-ink min-h-screen antialiased">
+
+  <!-- ============================= TOP NAVIGATION BAR ============================= -->
+  <header class="sticky top-0 z-30 bg-brand-600 shadow-card">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Brand -->
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-white/15 grid place-items-center shrink-0" aria-hidden="true">
+          <!-- Motorcycle / courier icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M6.5 6h4l2.5 4.5M9 17.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm11 0a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm-2.5-2.5H14a5 5 0 0 1-5-5M13 6h2l3 6.5"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-white font-extrabold text-lg sm:text-xl tracking-tight truncate">Bankai-Hiring</h1>
+          <p class="text-blue-100 text-[11px] sm:text-xs leading-tight truncate">Courier Hiring Management</p>
+        </div>
+      </div>
+      <!-- Actions -->
+      <div class="flex items-center gap-2">
+        <span id="navCount" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-blue-100 bg-white/10 px-3 py-1.5 rounded-full"></span>
+        <button type="button" onclick="openModal()"
+          class="inline-flex items-center gap-2 bg-white text-brand-600 font-semibold text-sm px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-50 active:scale-95 transition shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Add Courier
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+
+    <!-- ============================= SUMMARY CARDS ============================= -->
+    <section id="summaryCards" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <!-- Cards are rendered by JS (renderSummary) -->
+    </section>
+
+    <!-- ============================= SEARCH + FILTERS TOOLBAR ============================= -->
+    <section class="bg-white rounded-2xl shadow-card border border-slate-100 p-4">
+      <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+        <!-- Search -->
+        <div class="relative flex-1 min-w-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" d="m21 21-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"/>
+          </svg>
+          <input id="searchInput" type="search" placeholder="Search name, phone, national ID or plate number…"
+            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-surface/60 text-sm
+                   placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition" />
+        </div>
+        <!-- Filters -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:flex lg:items-center">
+          <select id="filterBranch" class="w-full lg:w-32 py-2.5 px-3 rounded-xl border border-slate-200 bg-surface/60 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
+            <option value="">All Branches</option>
+            <option value="QCD1">QCD1</option>
+            <option value="QCD2">QCD2</option>
+          </select>
+          <select id="filterType" class="w-full lg:w-40 py-2.5 px-3 rounded-xl border border-slate-200 bg-surface/60 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
+            <option value="">All Types</option>
+            <option value="Full Time">Full Time</option>
+            <option value="Part Time">Part Time</option>
+          </select>
+          <select id="filterStatus" class="w-full lg:w-44 py-2.5 px-3 rounded-xl border border-slate-200 bg-surface/60 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
+            <option value="">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Attended to D0">Attended to D0</option>
+            <option value="Not Attended to D0">Not Attended to D0</option>
+          </select>
+          <button id="resetFilters" type="button"
+            class="col-span-2 sm:col-span-3 lg:col-span-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-brand-600 hover:border-brand-500/40 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>
+            </svg>
+            Reset
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= DATA TABLE ============================= -->
+    <section class="bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden">
+      <div class="table-scroll overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-surface text-left text-xs uppercase tracking-wider text-slate-500">
+              <th class="px-4 py-3.5 font-semibold min-w-[190px]">Courier</th>
+              <th class="px-4 py-3.5 font-semibold min-w-[120px]">Phone</th>
+              <th class="px-4 py-3.5 font-semibold hidden lg:table-cell min-w-[140px]">National ID</th>
+              <th class="px-4 py-3.5 font-semibold">Branch</th>
+              <th class="px-4 py-3.5 font-semibold hidden md:table-cell min-w-[110px]">Type</th>
+              <th class="px-4 py-3.5 font-semibold min-w-[170px]">License</th>
+              <th class="px-4 py-3.5 font-semibold hidden xl:table-cell min-w-[120px]">Plate No.</th>
+              <th class="px-4 py-3.5 font-semibold hidden xl:table-cell min-w-[180px]">Outlook</th>
+              <th class="px-4 py-3.5 font-semibold min-w-[180px]">Status</th>
+              <th class="px-4 py-3.5 font-semibold text-right min-w-[110px]">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-100">
+            <!-- Rows are rendered by JS (renderTable) -->
+          </tbody>
+        </table>
+      </div>
+      <!-- Empty state + result count -->
+      <div id="emptyState" class="hidden px-6 py-14 text-center">
+        <div class="w-14 h-14 rounded-full bg-brand-50 grid place-items-center mx-auto mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.5 8h5M9.5 12h5M10 16h4m-9 4h6l-1-3a2.2 2.2 0 0 0-4 0l-1 3Zm6-16h2a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"/>
+          </svg>
+        </div>
+        <p class="font-semibold text-slate-700">No couriers found</p>
+        <p class="text-sm text-slate-500 mt-1">Try clearing filters, or add a new courier record.</p>
+      </div>
+      <div id="resultCount" class="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 bg-slate-50/60"></div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400 pb-4">
+      Bankai-Hiring · Data is stored locally in your browser (LocalStorage) · Built with HTML5 + Tailwind CSS + Vanilla JS
+    </footer>
+  </main>
+
+  <!-- ============================= ADD / EDIT MODAL ============================= -->
+  <div id="modalOverlay" class="hidden fixed inset-0 z-40">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal()"></div>
+    <!-- Modal panel -->
+    <div class="absolute inset-0 overflow-y-auto p-4 sm:p-8 grid place-items-center">
+      <div class="fade-in relative w-full max-w-2xl bg-white rounded-2xl shadow-pop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <!-- Modal header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-600 to-brand-500 rounded-t-2xl">
+          <h2 id="modalTitle" class="text-white font-bold text-lg">Add New Courier</h2>
+          <button type="button" onclick="closeModal()" aria-label="Close"
+            class="text-blue-100 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" d="M6 18 18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal body: the courier form -->
+        <form id="courierForm" novalidate class="px-6 py-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          <input type="hidden" id="courierId" />
+
+          <div>
+            <label for="f_fullName" class="block text-xs font-semibold text-slate-600 mb-1.5">Full Name <span class="text-red-500">*</span></label>
+            <input id="f_fullName" type="text" placeholder="e.g. أحمد محمد / Ahmed Mohamed" class="field" />
+            <p class="err hidden"></p>
+          </div>
+
+          <div>
+            <label for="f_phone" class="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number <span class="text-red-500">*</span></label>
+            <input id="f_phone" type="tel" dir="ltr" placeholder="01xxxxxxxxx" class="field" />
+            <p class="err hidden"></p>
+          </div>
+
+          <div>
+            <label for="f_nationalId" class="block text-xs font-semibold text-slate-600 mb-1.5">National ID <span class="text-red-500">*</span></label>
+            <input id="f_nationalId" type="text" inputmode="numeric" maxlength="14" dir="ltr" placeholder="14-digit ID" class="field num" />
+            <p class="err hidden"></p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="f_branch" class="block text-xs font-semibold text-slate-600 mb-1.5">Branch <span class="text-red-500">*</span></label>
+              <select id="f_branch" class="field">
+                <option value="">Select…</option>
+                <option value="QCD1">QCD1</option>
+                <option value="QCD2">QCD2</option>
+              </select>
+              <p class="err hidden"></p>
+            </div>
+            <div>
+              <label for="f_type" class="block text-xs font-semibold text-slate-600 mb-1.5">Employment Type <span class="text-red-500">*</span></label>
+              <select id="f_type" class="field">
+                <option value="">Select…</option>
+                <option value="Full Time">Full Time</option>
+                <option value="Part Time">Part Time</option>
+              </select>
+              <p class="err hidden"></p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 sm:col-span-2">
+            <div>
+              <label for="f_licenseStart" class="block text-xs font-semibold text-slate-600 mb-1.5">Personal License Start Date <span class="text-red-500">*</span></label>
+              <input id="f_licenseStart" type="date" class="field" />
+              <p class="err hidden"></p>
+            </div>
+            <div>
+              <label for="f_licenseEnd" class="block text-xs font-semibold text-slate-600 mb-1.5">License End Date <span class="text-red-500">*</span></label>
+              <input id="f_licenseEnd" type="date" class="field" />
+              <p class="err hidden"></p>
+            </div>
+          </div>
+
+          <div>
+            <label for="f_outlook" class="block text-xs font-semibold text-slate-600 mb-1.5">Outlook Account <span class="text-slate-400">(optional)</span></label>
+            <input id="f_outlook" type="email" dir="ltr" placeholder="courier@company.com" class="field" />
+            <p class="err hidden"></p>
+          </div>
+
+          <div>
+            <label for="f_plate" class="block text-xs font-semibold text-slate-600 mb-1.5">Motorcycle Plate Number <span class="text-slate-400">(optional)</span></label>
+            <input id="f_plate" type="text" dir="ltr" placeholder="e.g. ABC 123" class="field" />
+            <p class="err hidden"></p>
+          </div>
+
+          <div class="sm:col-span-2">
+            <label for="f_status" class="block text-xs font-semibold text-slate-600 mb-1.5">Courier Status <span class="text-red-500">*</span></label>
+            <select id="f_status" class="field">
+              <option value="">Select…</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Attended to D0">Attended to D0</option>
+              <option value="Not Attended to D0">Not Attended to D0</option>
+            </select>
+            <p class="err hidden"></p>
+          </div>
+
+          <!-- Modal footer -->
+          <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-2 border-t border-slate-100 mt-1">
+            <button type="button" onclick="closeModal()"
+              class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+            <button type="submit" id="saveBtn"
+              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold shadow-sm active:scale-95 transition">
+              Save Courier
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= DELETE CONFIRMATION MODAL ============================= -->
+  <div id="deleteOverlay" class="hidden fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeDelete()"></div>
+    <div class="absolute inset-0 grid place-items-center p-4">
+      <div class="fade-in relative bg-white rounded-2xl shadow-pop max-w-sm w-full p-6 text-center" role="dialog" aria-modal="true">
+        <div class="w-12 h-12 rounded-full bg-red-50 grid place-items-center mx-auto mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 3.5h.01M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3l-7.7-13.5a2 2 0 0 0-3.4 0Z"/>
+          </svg>
+        </div>
+        <h3 class="font-bold text-lg text-ink">Delete courier record?</h3>
+        <p id="deleteMsg" class="text-sm text-slate-500 mt-1.5 mb-5"></p>
+        <div class="flex items-center justify-center gap-3">
+          <button type="button" onclick="closeDelete()"
+            class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+          <button type="button" onclick="confirmDelete()"
+            class="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-sm active:scale-95 transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= TOAST NOTIFICATIONS ============================= -->
+  <div id="toastStack" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[calc(100%-2rem)] max-w-xs"></div>
+
+  <!-- Shared input styling injected once -->
+  <style>
+    .field {
+      width: 100%; padding: 0.65rem 0.85rem; border-radius: 0.75rem;
+      border: 1px solid #E2E8F0; background: #F8FAFC; font-size: 0.875rem; color: #0F172A;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .field:focus { outline: none; background: #fff; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .25); }
+    .field.invalid { border-color: #EF4444; background: #FEF2F2; }
+    .err { color: #DC2626; font-size: 0.72rem; margin-top: 0.3rem; font-weight: 500; }
+  </style>
+
+  <script>
+    'use strict';
+
+    /* ============================================================
+       Bankai-Hiring — Application Logic (Vanilla JS)
+       Modules:
+         1. Constants & helpers
+         2. State & LocalStorage persistence
+         3. Rendering (summary cards, table, empty state)
+         4. Search & filters
+         5. CRUD (add / edit / delete / quick status change)
+         6. Validation
+         7. Toasts & modals wiring
+       ============================================================ */
+
+    /* ------------------------- 1. Constants & helpers ------------------------- */
+
+    const STORAGE_KEY = 'bankai-hiring:records';
+    const STATUS_META = {
+      'Active':              { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',    dot: 'bg-emerald-500' },
+      'Inactive':            { badge: 'bg-slate-100 text-slate-600 ring-slate-500/20',         dot: 'bg-slate-400' },
+      'Attended to D0':      { badge: 'bg-brand-50 text-brand-600 ring-blue-600/20',           dot: 'bg-brand-500' },
+      'Not Attended to D0':  { badge: 'bg-amber-50 text-amber-700 ring-amber-600/20',          dot: 'bg-amber-500' }
+    };
+    const STATUSES = Object.keys(STATUS_META);
+
+    const qs  = (sel) => document.querySelector(sel);
+    const esc = (str) => String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const escAttr = esc; // same escaping works inside attributes we control
+
+    const isArabic = (str) => /[\u0600-\u06FF]/.test(str); // detect Arabic text to switch font
+
+    /** Days from today until `dateStr` (negative if in the past). */
+    const daysUntil = (dateStr) => {
+      if (!dateStr) return null;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const end = new Date(dateStr + 'T00:00:00');
+      return Math.round((end - today) / 86400000);
+    };
+
+    const fmtDate = (dateStr) => dateStr
+      ? new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—';
+
+    /** Licenses expiring within this many days are flagged "expiring soon". */
+    const EXPIRY_SOON_DAYS = 30;
+
+    /* ------------------------- 2. State & persistence ------------------------- */
+
+    /** Seed data shown on first visit — 4 realistic records (mixed EN/AR names). */
+    const seedRecords = () => ([
+      { id: crypto.randomUUID(), fullName: 'أحمد محمد سعيد',        phone: '01012345678', nationalId: '29901011234567', branch: 'QCD1', employmentType: 'Full Time', licenseStart: '2024-11-01', licenseEnd: '2025-10-31', outlook: 'ahmed.saeed@bankai.com',    plate: 'ABC 123',  status: 'Active' },
+      { id: crypto.randomUUID(), fullName: 'Youssef Khaled',        phone: '01123456789', nationalId: '30005051234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-06-15', licenseEnd: '2026-06-14', outlook: 'youssef.k@bankai.com',     plate: 'XYZ 456',  status: 'Attended to D0' },
+      { id: crypto.randomUUID(), fullName: 'محمود علي حسن',         phone: '01234567890', nationalId: '29803031234567', branch: 'QCD1', employmentType: 'Full Time', licenseStart: '2024-01-10', licenseEnd: '2025-01-09', outlook: 'mahmoud.hassan@bankai.com', plate: 'JKL 789',  status: 'Inactive' },
+      { id: crypto.randomUUID(), fullName: 'Omar Tarek',            phone: '01098765432', nationalId: '30109101234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-09-01', licenseEnd: '2026-09-30', outlook: '',                          plate: 'MNO 321',  status: 'Not Attended to D0' }
+    ]);
+
+    let state = load();
+    let deleteTargetId = null;
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { console.warn('Failed to load saved data:', e); }
+      return seedRecords(); // first run -> demo data
+    }
+
+    function save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.error('Failed to persist data:', e);
+        toast('Could not save data — storage unavailable.', 'error');
+      }
+    }
+
+    /* ------------------------- 3. Rendering ------------------------- */
+
+    /** Small SVG icon markup reused across summary cards. */
+    const icon = (path) =>
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+
+    function renderSummary() {
+      const rows = state;
+      const active = rows.filter(r => r.status === 'Active').length;
+      const attended = rows.filter(r => r.status === 'Attended to D0').length;
+      const notAttended = rows.filter(r => r.status === 'Not Attended to D0').length;
+      const expiring = rows.filter(r => { const d = daysUntil(r.licenseEnd); return d !== null && d <= EXPIRY_SOON_DAYS; }).length;
+
+      const cards = [
+        { label: 'Total Couriers',    value: rows.length,        icon: icon('M12 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM5 20a7 7 0 0 1 14 0'), accent: 'bg-brand-50 text-brand-600' },
+        { label: 'Active',            value: active,             icon: icon('M5 13l4 4L19 7'),                                        accent: 'bg-emerald-50 text-emerald-600' },
+        { label: 'Attended to D0',    value: attended,           icon: icon('M9 12l2 2 4-4M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'),     accent: 'bg-brand-50 text-brand-600' },
+        { label: 'Not Attended to D0',value: notAttended,        icon: icon('M12 9v4m0 3.5h.01M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'), accent: 'bg-amber-50 text-amber-600' },
+        { label: 'Licenses Expiring', value: expiring,           icon: icon('M12 8v4l2.5 2.5M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'),   accent: 'bg-red-50 text-red-600' }
+      ];
+
+      qs('#summaryCards').innerHTML = cards.map(c => `
+        <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-4 sm:p-5 flex items-center gap-3.5">
+          <div class="w-11 h-11 rounded-xl grid place-items-center shrink-0 ${c.accent}">${c.icon}</div>
+          <div class="min-w-0">
+            <p class="text-[11px] sm:text-xs font-medium text-slate-500 uppercase tracking-wide truncate">${c.label}</p>
+            <p class="text-2xl sm:text-[1.65rem] font-extrabold text-ink num leading-tight">${c.value}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    /** License cell: dates + visual badge when expired or expiring soon. */
+    function licenseCell(r) {
+      const d = daysUntil(r.licenseEnd);
+      let badge = '';
+      if (d !== null && d < 0) {
+        badge = `<span class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 ring-1 ring-red-500/20">⚠ Expired</span>`;
+      } else if (d !== null && d <= EXPIRY_SOON_DAYS) {
+        badge = `<span class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-500/20">Expiring in ${d}d</span>`;
+      }
+      return `
+        <div class="leading-tight">
+          <p class="num text-slate-700 text-xs font-medium">${fmtDate(r.licenseStart)} → ${fmtDate(r.licenseEnd)}</p>
+          ${badge}
+        </div>`;
+    }
+
+    function statusBadge(status) {
+      const m = STATUS_META[status] || { badge: 'bg-slate-100 text-slate-600 ring-slate-500/20', dot: 'bg-slate-400' };
+      return `
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${m.badge}" dir="ltr">
+            <span class="w-1.5 h-1.5 rounded-full ${m.dot}"></span>${esc(status)}
+          </span>
+        </div>`;
+    }
+
+    function renderTable() {
+      const list = getFiltered();
+
+      // Search & filters wiring once (below), but the render reflects current filters.
+      const nameFont = s => isArabic(s) ? 'font-arabic' : '';
+
+      qs('#tableBody').innerHTML = list.map(r => `
+        <tr class="hover:bg-brand-50/40 transition-colors">
+          <!-- Courier: avatar initials + name + national id on mobile -->
+          <td class="px-4 py-3.5">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-full bg-brand-600 text-white grid place-items-center text-xs font-bold shrink-0">
+                ${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}
+              </div>
+              <div class="min-w-0">
+                <p class="font-semibold text-ink truncate ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</p>
+                <p class="text-[11px] text-slate-400 num lg:hidden">${esc(r.nationalId)}</p>
+              </div>
+            </div>
+          </td>
+          <!-- Phone -->
+          <td class="px-4 py-3.5">
+            <a href="tel:${escAttr(r.phone)}" class="num text-slate-700 hover:text-brand-600 font-medium" dir="ltr">${esc(r.phone)}</a>
+          </td>
+          <!-- National ID (desktop only) -->
+          <td class="px-4 py-3.5 hidden lg:table-cell"><span class="num text-slate-600">${esc(r.nationalId)}</span></td>
+          <!-- Branch -->
+          <td class="px-4 py-3.5">
+            <span class="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg bg-brand-50 text-brand-600 ring-1 ring-blue-600/10">QCD</span>
+            <span class="num font-bold text-ink ml-1">${esc(r.branch)}</span>
+          </td>
+          <!-- Employment type (md+) -->
+          <td class="px-4 py-3.5 hidden md:table-cell">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>
+          </td>
+          <!-- License -->
+          <td class="px-4 py-3.5">${licenseCell(r)}</td>
+          <!-- Plate (xl+) -->
+          <td class="px-4 py-3.5 hidden xl:table-cell"><span class="num text-slate-700 font-medium">${esc(r.plate) || '—'}</span></td>
+          <!-- Outlook (xl+) -->
+          <td class="px-4 py-3.5 hidden xl:table-cell max-w-[180px]">
+            ${r.outlook
+              ? `<a href="mailto:${escAttr(r.outlook)}" class="text-xs text-slate-600 hover:text-brand-600 truncate block" dir="ltr" title="${escAttr(r.outlook)}">${esc(r.outlook)}</a>`
+              : '<span class="text-slate-300 text-xs">—</span>'}
+          </td>
+          <!-- Quick status change (inline dropdown) -->
+          <td class="px-4 py-3.5">
+            <label class="sr-only" aria-hidden="true">Change status</label>
+            <select onchange="quickStatus('${r.id}', this.value)"
+              class="text-xs font-semibold py-1.5 pl-2.5 pr-7 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-brand-500/50 focus:outline-none ${STATUS_META[r.status]?.badge ?? ''} bg-clip-padding">
+              ${STATUSES.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <div class="mt-1 sm:hidden">${statusBadge(r.status)}</div>
+          </td>
+          <!-- Actions -->
+          <td class="px-4 py-3.5 text-right">
+            <div class="inline-flex items-center gap-1">
+              <button type="button" onclick='openModal(${JSON.stringify(r.id)})' title="Edit"
+                class="p-2 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
+              </button>
+              <button type="button" onclick="askDelete('${r.id}')" title="Delete"
+                class="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      // Empty state + count
+      qs('#emptyState').classList.toggle('hidden', list.length !== 0);
+      qs('#resultCount').textContent = `Showing ${list.length} of ${state.length} courier record${state.length === 1 ? '' : 's'}`;
+      qs('#navCount').textContent = `${state.length} records`;
+    }
+
+    const rerender = () => { renderSummary(); renderTable(); };
+
+    /* ------------------------- 4. Search & filters ------------------------- */
+
+    function getFiltered() {
+      const q = qs('#searchInput').value.trim().toLowerCase();
+      const branch = qs('#filterBranch').value;
+      const type = qs('#filterType').value;
+      const status = qs('#filterStatus').value;
+
+      return state.filter(r => {
+        const matchesQ = !q ||
+          r.fullName.toLowerCase().includes(q) ||
+          r.phone.toLowerCase().includes(q) ||
+          r.nationalId.includes(q) ||
+          (r.plate || '').toLowerCase().includes(q);
+        return matchesQ &&
+          (!branch || r.branch === branch) &&
+          (!type || r.employmentType === type) &&
+          (!status || r.status === status);
+      });
+    }
+
+    qs('#searchInput').addEventListener('input', renderTable);
+    ['filterBranch', 'filterType', 'filterStatus'].forEach(id =>
+      qs('#' + id).addEventListener('change', renderTable));
+    qs('#resetFilters').addEventListener('click', () => {
+      qs('#searchInput').value = '';
+      ['filterBranch', 'filterType', 'filterStatus'].forEach(id => (qs('#' + id).value = ''));
+      renderTable();
+    });
+
+    /* ------------------------- 5. CRUD ------------------------- */
+
+    /** Open the modal. With `id` -> edit mode (prefill), without -> add mode. */
+    function openModal(id) {
+      const form = qs('#courierForm');
+      form.reset();
+      clearFieldErrors();
+      qs('#courierId').value = id || '';
+
+      if (id) {
+        const r = state.find(x => x.id === id);
+        if (!r) return toast('Record not found.', 'error');
+        qs('#modalTitle').textContent = 'Edit Courier';
+        Object.entries({
+          f_fullName: r.fullName, f_phone: r.phone, f_nationalId: r.nationalId,
+          f_branch: r.branch, f_type: r.employmentType,
+          f_licenseStart: r.licenseStart, f_licenseEnd: r.licenseEnd,
+          f_outlook: r.outlook, f_plate: r.plate, f_status: r.status
+        }).forEach(([elId, val]) => { qs('#' + elId).value = val || ''; });
+      } else {
+        qs('#modalTitle').textContent = 'Add New Courier';
+      }
+
+      qs('#modalOverlay').classList.remove('hidden');
+      document.body.style.overflow = 'hidden'; // lock page scroll behind modal
+      qs('#f_fullName').focus();
+    }
+
+    function closeModal() {
+      qs('#modalOverlay').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    function quickStatus(id, status) {
+      const r = state.find(x => x.id === id);
+      if (!r) return;
+      const prev = r.status;
+      r.status = status;
+      if (!validateRecord(r, { silent: true })) { // status is always valid here, but keep data sane
+        r.status = prev;
+      } else {
+        save();
+        toast(`Status updated to "${status}"`, 'success');
+      }
+      rerender();
+    }
+
+    function askDelete(id) {
+      deleteTargetId = id;
+      const r = state.find(x => x.id === id);
+      qs('#deleteMsg').textContent = r ? `"${r.fullName}" will be permanently removed. This action cannot be undone.` : 'This record will be permanently removed.';
+      qs('#deleteOverlay').classList.remove('hidden');
+    }
+
+    const closeDelete = () => { deleteTargetId = null; qs('#deleteOverlay').classList.add('hidden'); };
+
+    function confirmDelete() {
+      if (!deleteTargetId) return closeDelete();
+      state = state.filter(r => r.id !== deleteTargetId);
+      save();
+      closeDelete();
+      toast('Courier record deleted.', 'success');
+      rerender();
+    }
+
+    /** Form submit -> create or update. */
+    qs('#courierForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = {
+        fullName: qs('#f_fullName').value.trim(),
+        phone: qs('#f_phone').value.trim(),
+        nationalId: qs('#f_nationalId').value.trim(),
+        branch: qs('#f_branch').value,
+        employmentType: qs('#f_type').value,
+        licenseStart: qs('#f_licenseStart').value,
+        licenseEnd: qs('#f_licenseEnd').value,
+        outlook: qs('#f_outlook').value.trim(),
+        plate: qs('#f_plate').value.trim(),
+        status: qs('#f_status').value
+      };
+
+      const errors = validateRecord(data);
+      if (Object.keys(errors).length) {
+        showFieldErrors(errors);
+        toast('Please fix the highlighted fields.', 'error');
+        return;
+      }
+
+      const id = qs('#courierId').value;
+      if (id) {
+        const idx = state.findIndex(r => r.id === id);
+        if (idx !== -1) state[idx] = { ...state[idx], ...data };
+        toast('Courier record updated.', 'success');
+      } else {
+        state.push({ id: crypto.randomUUID(), ...data });
+        toast('New courier added.', 'success');
+      }
+      save();
+      closeModal();
+      rerender();
+    });
+
+    /* ------------------------- 6. Validation ------------------------- */
+
+    /**
+     * Validates a courier record.
+     * silent=true -> no UI; returns null when valid, else true (used for quick status).
+     * Returns an object of {field: message} for the form flow.
+     */
+    function validateRecord(d, { silent = false } = {}) {
+      const e = {};
+
+      if (!d.fullName) e.fullName = 'Full name is required.';
+      else if (d.fullName.length < 3) e.fullName = 'Name must be at least 3 characters.';
+
+      if (!d.phone) e.phone = 'Phone number is required.';
+      else if (!/^01[0125][0-9]{8}$/.test(d.phone)) e.phone = 'Enter a valid Egyptian mobile number (11 digits).';
+
+      if (!d.nationalId) e.nationalId = 'National ID is required.';
+      else if (!/^\d{14}$/.test(d.nationalId)) e.nationalId = 'National ID must be exactly 14 digits.';
+
+      if (!d.branch) e.branch = 'Select a branch.';
+      if (!d.employmentType) e.type = 'Select an employment type.';
+
+      if (!d.licenseStart) e.licenseStart = 'License start date is required.';
+      if (!d.licenseEnd) e.licenseEnd = 'License end date is required.';
+      if (d.licenseStart && d.licenseEnd && d.licenseEnd < d.licenseStart)
+        e.licenseEnd = 'End date must be after the start date.';
+
+      if (d.outlook && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.outlook)) e.outlook = 'Enter a valid email address.';
+
+      if (!d.status) e.status = 'Select a courier status.';
+
+      if (silent) return Object.keys(e).length === 0;
+      return e;
+    }
+
+    /** Refresh <p class="err"> hints under each input based on the error map. */
+    const FIELD_TO_LABEL = { fullName: 'f_fullName', phone: 'f_phone', nationalId: 'f_nationalId', branch: 'f_branch', type: 'f_type', licenseStart: 'f_licenseStart', licenseEnd: 'f_licenseEnd', outlook: 'f_outlook', status: 'f_status' };
+
+    function showFieldErrors(errors) {
+      clearFieldErrors();
+      for (const [key, msg] of Object.entries(errors)) {
+        const input = qs('#' + FIELD_TO_LABEL[key]);
+        if (!input) continue;
+        input.classList.add('invalid');
+        const p = input.parentElement.querySelector('.err');
+        if (p) { p.textContent = msg; p.classList.remove('hidden'); }
+      }
+    }
+
+    function clearFieldErrors() {
+      document.querySelectorAll('#courierForm .invalid').forEach(el => el.classList.remove('invalid'));
+      document.querySelectorAll('#courierForm .err').forEach(p => { p.classList.add('hidden'); p.textContent = ''; });
+    }
+
+    /* ------------------------- 7. Toasts & keyboard ------------------------- */
+
+    /** Show a short-lived toast notification. type: 'success' | 'error' */
+    function toast(message, type = 'success') {
+      const palette = {
+        success: 'bg-emerald-600', error: 'bg-red-600'
+      }[type] || 'bg-slate-800';
+      const el = document.createElement('div');
+      el.className = `fade-in flex items-start gap-2.5 ${palette} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-pop`;
+      el.setAttribute('role', 'status');
+      el.textContent = message;
+      qs('#toastStack').appendChild(el);
+      setTimeout(() => {
+        el.style.transition = 'opacity .3s, transform .3s';
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(6px)';
+        setTimeout(() => el.remove(), 320);
+      }, 2600);
+    }
+
+    // Keyboard shortcuts: Esc closes modals
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!qs('#deleteOverlay').classList.contains('hidden')) closeDelete();
+      else if (!qs('#modalOverlay').classList.contains('hidden')) closeModal();
+    });
+
+    /* ------------------------- Boot ------------------------- */
+    rerender();
+  </script>
+</body>
+</html>
