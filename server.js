@@ -37,7 +37,7 @@ function validate(data) {
   if (!data.licenseStart) e.licenseStart = 'License start date is required.';
   if (!data.licenseEnd || (data.licenseStart && String(data.licenseEnd) < String(data.licenseStart))) e.licenseEnd = 'End date is required and must be after the start date.';
   if (data.outlook && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.outlook).trim())) e.outlook = 'Outlook account must be a valid email.';
-  if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0'].includes(data.status)) e.status = 'Invalid courier status.';
+  if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0', 'OnBoarding', 'OffBoarding'].includes(data.status)) e.status = 'Invalid courier status.';
   return e;
 }
 
@@ -97,7 +97,7 @@ app.put('/api/couriers/:id', (req, res) => {
 // Quick status change
 app.patch('/api/couriers/:id/status', (req, res) => {
   const { status } = req.body;
-  if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0'].includes(status)) {
+  if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0', 'OnBoarding', 'OffBoarding'].includes(status)) {
     return res.status(400).json({ error: 'Invalid courier status.' });
   }
   const updated = db.updateStatus(req.params.id, status);

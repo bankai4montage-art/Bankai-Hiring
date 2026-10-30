@@ -21,8 +21,8 @@
         extend: {
           colors: {
             brand: {
-              50: '#EFF6FF', 100: '#DBEAFE', 500: '#2563EB',
-              600: '#1E40AF', 700: '#1E3A8A', 900: '#0F172A'
+              50: '#EFF6FF', 100: '#DBEAFE', 200: '#BFDBFE', 300: '#93C5FD',
+              500: '#2563EB', 600: '#1E40AF', 700: '#1E3A8A', 900: '#0F172A'
             },
             surface: '#F8FAFC',
             ink: '#0F172A'
@@ -33,7 +33,8 @@
           },
           boxShadow: {
             card: '0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.08)',
-            pop: '0 10px 30px rgba(30, 64, 175, 0.18)'
+            pop: '0 10px 30px rgba(30, 64, 175, 0.18)',
+            glow: '0 0 0 4px rgba(37, 99, 235, 0.15), 0 8px 24px rgba(37, 99, 235, 0.25)'
           }
         }
       }
@@ -41,26 +42,72 @@
   </script>
 
   <style>
-    /* Small custom touches that Tailwind utilities don't cover */
     body { font-family: 'Inter', 'Cairo', sans-serif; }
-    .num { font-variant-numeric: tabular-nums; }              /* stable column width for numbers/IDs */
-    .fade-in { animation: fadeIn .25s ease-out both; }        /* modal entrance */
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
-    /* Rounded scrollbars for the table area */
+    .num { font-variant-numeric: tabular-nums; }
+
+    /* ---------- Motion library ---------- */
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes popIn { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+    @keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,-40px) scale(1.15); } }
+    @keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-70px,50px) scale(1.1); } }
+    @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+    @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(96,165,250,.55); } 70% { box-shadow: 0 0 0 9px rgba(96,165,250,0); } 100% { box-shadow: 0 0 0 0 rgba(96,165,250,0); } }
+    @keyframes shimmer { from { background-position: -400px 0; } to { background-position: 400px 0; } }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px) scale(.95); } to { opacity: 1; transform: none; } }
+
+    .fade-up   { animation: fadeUp .45s cubic-bezier(.22,1,.36,1) both; }
+    .pop-in    { animation: popIn .3s cubic-bezier(.22,1,.36,1) both; }
+    .row-anim  { animation: fadeUp .4s cubic-bezier(.22,1,.36,1) both; }
+    .toast-anim{ animation: toastIn .28s cubic-bezier(.22,1,.36,1) both; }
+    .pulse-ring{ animation: pulseRing 2.2s ease infinite; }
+
+    /* Animated navbar gradient */
+    .nav-gradient {
+      background: linear-gradient(110deg, #1E3A8A, #1E40AF, #2563EB, #1E40AF, #1E3A8A);
+      background-size: 250% 100%;
+      animation: gradientShift 14s ease infinite;
+    }
+
+    /* Floating background blobs */
+    .blob { position: fixed; border-radius: 9999px; filter: blur(90px); opacity: .55; pointer-events: none; z-index: 0; }
+    .blob-1 { width: 480px; height: 480px; background: #DBEAFE; top: -140px; left: -120px; animation: float1 18s ease-in-out infinite; }
+    .blob-2 { width: 420px; height: 420px; background: #E0E7FF; bottom: -160px; right: -100px; animation: float2 22s ease-in-out infinite; }
+    .blob-3 { width: 300px; height: 300px; background: #DCFCE7; top: 40%; left: 55%; opacity: .3; animation: float1 26s ease-in-out infinite reverse; }
+
+    /* Glass surfaces */
+    .glass { background: rgba(255, 255, 255, .78); backdrop-filter: blur(14px); }
+
+    /* Loading skeleton */
+    .skeleton { background: linear-gradient(90deg, #EEF2F7 25%, #F8FAFC 50%, #EEF2F7 75%); background-size: 400px 100%; animation: shimmer 1.3s infinite linear; }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #C7D2E2; border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background: #94A3B8; background-clip: content-box; border: 2px solid transparent; }
     .table-scroll::-webkit-scrollbar { height: 8px; }
     .table-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+
+    /* Sortable headers */
+    th[data-sort] { cursor: pointer; user-select: none; transition: color .15s, background .15s; }
+    th[data-sort]:hover { color: #1E40AF; background: rgba(37, 99, 235, .06); }
+    th[data-sorted] { color: #1E40AF !important; }
   </style>
 </head>
 
-<body class="bg-surface text-ink min-h-screen antialiased">
+<body class="bg-surface text-ink min-h-screen antialiased relative">
+
+  <!-- Ambient animated background -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
 
   <!-- ============================= TOP NAVIGATION BAR ============================= -->
-  <header class="sticky top-0 z-30 bg-brand-600 shadow-card">
+  <header class="sticky top-0 z-30 nav-gradient shadow-[0_8px_30px_rgba(30,64,175,0.25)]">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
       <!-- Brand -->
       <div class="flex items-center gap-3 min-w-0">
-        <div class="w-10 h-10 rounded-xl bg-white/15 grid place-items-center shrink-0" aria-hidden="true">
-          <!-- Motorcycle / courier icon -->
+        <div class="w-10 h-10 rounded-xl bg-white/15 grid place-items-center shrink-0 ring-1 ring-white/25" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
             <path stroke-linecap="round" stroke-linejoin="round"
               d="M6.5 6h4l2.5 4.5M9 17.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm11 0a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm-2.5-2.5H14a5 5 0 0 1-5-5M13 6h2l3 6.5"/>
@@ -68,15 +115,18 @@
         </div>
         <div class="min-w-0">
           <h1 class="text-white font-extrabold text-lg sm:text-xl tracking-tight truncate">Bankai-Hiring</h1>
-          <p class="text-blue-100 text-[11px] sm:text-xs leading-tight truncate">Courier Hiring Management · <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Live Database</span></p>
+          <p class="text-blue-100 text-[11px] sm:text-xs leading-tight truncate flex items-center gap-1.5">
+            <span class="relative inline-flex w-2 h-2"><span class="absolute inline-flex w-2 h-2 rounded-full bg-emerald-400 opacity-75 animate-ping"></span><span class="inline-flex w-2 h-2 rounded-full bg-emerald-400"></span></span>
+            Live Database
+          </p>
         </div>
       </div>
       <!-- Actions -->
       <div class="flex items-center gap-2">
-        <span id="navCount" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-blue-100 bg-white/10 px-3 py-1.5 rounded-full"></span>
+        <span id="navCount" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/15 ring-1 ring-white/25 px-3 py-1.5 rounded-full"></span>
         <button type="button" onclick="openModal()"
-          class="inline-flex items-center gap-2 bg-white text-brand-600 font-semibold text-sm px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-50 active:scale-95 transition shadow-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          class="group inline-flex items-center gap-2 bg-white text-brand-600 font-semibold text-sm px-3 sm:px-4 py-2 rounded-xl hover:bg-blue-50 active:scale-95 transition-all shadow-lg hover:shadow-glow">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-hover:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4">
             <path stroke-linecap="round" d="M12 4v16m8-8H4"/>
           </svg>
           Add Courier
@@ -85,15 +135,15 @@
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 relative z-10">
 
-    <!-- ============================= SUMMARY CARDS ============================= -->
-    <section id="summaryCards" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+    <!-- ============================= SUMMARY CARDS (clickable = filter) ============================= -->
+    <section id="summaryCards" class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-7 gap-3 sm:gap-4">
       <!-- Cards are rendered by JS (renderSummary) -->
     </section>
 
     <!-- ============================= SEARCH + FILTERS TOOLBAR ============================= -->
-    <section class="bg-white rounded-2xl shadow-card border border-slate-100 p-4">
+    <section class="glass rounded-2xl shadow-card border border-white/70 p-4">
       <div class="flex flex-col lg:flex-row lg:items-center gap-3">
         <!-- Search -->
         <div class="relative flex-1 min-w-0">
@@ -101,30 +151,26 @@
             <path stroke-linecap="round" d="m21 21-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z"/>
           </svg>
           <input id="searchInput" type="search" placeholder="Search name, phone, national ID or plate number…"
-            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-surface/60 text-sm
-                   placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition" />
+            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white/70 text-sm
+                   placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 focus:bg-white transition" />
         </div>
         <!-- Filters -->
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:flex lg:items-center">
-          <select id="filterBranch" class="w-full lg:w-32 py-2.5 px-3 rounded-xl border border-slate-200 bg-surface/60 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
+          <select id="filterBranch" class="w-full lg:w-32 py-2.5 px-3 rounded-xl border border-slate-200 bg-white/70 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
             <option value="">All Branches</option>
             <option value="QCD1">QCD1</option>
             <option value="QCD2">QCD2</option>
           </select>
-          <select id="filterType" class="w-full lg:w-40 py-2.5 px-3 rounded-xl border border-slate-200 bg-surface/60 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
+          <select id="filterType" class="w-full lg:w-40 py-2.5 px-3 rounded-xl border border-slate-200 bg-white/70 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
             <option value="">All Types</option>
             <option value="Full Time">Full Time</option>
             <option value="Part Time">Part Time</option>
           </select>
-          <select id="filterStatus" class="w-full lg:w-44 py-2.5 px-3 rounded-xl border border-slate-200 bg-surface/60 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
+          <select id="filterStatus" class="w-full lg:w-44 py-2.5 px-3 rounded-xl border border-slate-200 bg-white/70 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-brand-500 transition">
             <option value="">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Attended to D0">Attended to D0</option>
-            <option value="Not Attended to D0">Not Attended to D0</option>
           </select>
           <button id="resetFilters" type="button"
-            class="col-span-2 sm:col-span-3 lg:col-span-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-brand-600 hover:border-brand-500/40 transition">
+            class="col-span-2 sm:col-span-3 lg:col-span-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-brand-600 hover:border-brand-500/40 active:scale-95 transition">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>
             </svg>
@@ -132,24 +178,33 @@
           </button>
         </div>
       </div>
+      <!-- Export row -->
+      <div class="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
+        <p class="text-xs text-slate-400 hidden sm:block">Tip: click a summary card (or a column header) to filter & sort instantly.</p>
+        <button id="exportCsv" type="button"
+          class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 hover:bg-emerald-100 active:scale-95 transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+          Export CSV
+        </button>
+      </div>
     </section>
 
     <!-- ============================= DATA TABLE ============================= -->
-    <section class="bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden">
+    <section class="glass rounded-2xl shadow-card border border-white/70 overflow-hidden">
       <div class="table-scroll overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-surface text-left text-xs uppercase tracking-wider text-slate-500">
-              <th class="px-4 py-3.5 font-semibold min-w-[190px]">Courier</th>
-              <th class="px-4 py-3.5 font-semibold min-w-[120px]">Phone</th>
-              <th class="px-4 py-3.5 font-semibold hidden lg:table-cell min-w-[140px]">National ID</th>
-              <th class="px-4 py-3.5 font-semibold">Branch</th>
-              <th class="px-4 py-3.5 font-semibold hidden md:table-cell min-w-[110px]">Type</th>
-              <th class="px-4 py-3.5 font-semibold min-w-[170px]">License</th>
+            <tr class="bg-brand-900/5 text-left text-[11px] uppercase tracking-wider text-slate-500">
+              <th data-sort="fullName" class="px-4 py-3.5 font-semibold min-w-[190px]">Courier</th>
+              <th data-sort="phone" class="px-4 py-3.5 font-semibold min-w-[120px]">Phone</th>
+              <th data-sort="nationalId" class="px-4 py-3.5 font-semibold hidden lg:table-cell min-w-[140px]">National ID</th>
+              <th data-sort="branch" class="px-4 py-3.5 font-semibold">Branch</th>
+              <th data-sort="employmentType" class="px-4 py-3.5 font-semibold hidden md:table-cell min-w-[110px]">Type</th>
+              <th data-sort="licenseEnd" class="px-4 py-3.5 font-semibold min-w-[170px]">License</th>
               <th class="px-4 py-3.5 font-semibold hidden xl:table-cell min-w-[120px]">Plate No.</th>
               <th class="px-4 py-3.5 font-semibold hidden xl:table-cell min-w-[180px]">Outlook</th>
-              <th class="px-4 py-3.5 font-semibold min-w-[180px]">Status</th>
-              <th class="px-4 py-3.5 font-semibold text-right min-w-[110px]">Actions</th>
+              <th data-sort="status" class="px-4 py-3.5 font-semibold min-w-[180px]">Status</th>
+              <th class="px-4 py-3.5 font-semibold text-right min-w-[130px]">Actions</th>
             </tr>
           </thead>
           <tbody id="tableBody" class="divide-y divide-slate-100">
@@ -157,72 +212,77 @@
           </tbody>
         </table>
         <!-- Loading skeleton -->
-        <div id="loadingState" class="px-6 py-14 text-center">
-          <div class="w-10 h-10 rounded-full border-3 border-brand-100 border-t-brand-500 animate-spin mx-auto"></div>
-          <p class="text-sm text-slate-500 mt-3">Loading couriers from database…</p>
+        <div id="loadingState" class="px-6 py-10 space-y-3">
+          <div class="skeleton h-12 rounded-xl"></div>
+          <div class="skeleton h-12 rounded-xl"></div>
+          <div class="skeleton h-12 rounded-xl"></div>
+          <p class="text-sm text-slate-500 text-center pt-2">Loading couriers from database…</p>
         </div>
       </div>
-      <!-- Empty state + result count -->
+      <!-- Empty state -->
       <div id="emptyState" class="hidden px-6 py-14 text-center">
-        <div class="w-14 h-14 rounded-full bg-brand-50 grid place-items-center mx-auto mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <div class="w-16 h-16 rounded-2xl bg-brand-50 grid place-items-center mx-auto mb-4 rotate-3 hover:rotate-0 transition-transform">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.5 8h5M9.5 12h5M10 16h4m-9 4h6l-1-3a2.2 2.2 0 0 0-4 0l-1 3Zm6-16h2a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"/>
           </svg>
         </div>
-        <p class="font-semibold text-slate-700">No couriers found</p>
-        <p class="text-sm text-slate-500 mt-1">Try clearing filters, or add a new courier record.</p>
+        <p class="font-bold text-slate-700">No couriers found</p>
+        <p class="text-sm text-slate-500 mt-1 mb-4">Try clearing filters, or add a new courier record.</p>
+        <button type="button" onclick="resetAllFilters()"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 underline underline-offset-4 transition">Clear all filters</button>
       </div>
-      <div id="resultCount" class="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 bg-slate-50/60"></div>
+      <div id="resultCount" class="px-4 py-3 border-t border-white/70 text-xs text-slate-500"></div>
     </section>
 
     <footer class="text-center text-xs text-slate-400 pb-4">
-      Bankai-Hiring · Data persists in a SQLite database on Railway · Built with HTML5 + Tailwind CSS + Node.js
+      Bankai-Hiring · SQLite database on Railway · HTML5 + Tailwind CSS + Node.js
     </footer>
   </main>
 
   <!-- ============================= ADD / EDIT MODAL ============================= -->
   <div id="modalOverlay" class="hidden fixed inset-0 z-40">
-    <!-- Backdrop -->
-    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeModal()"></div>
-    <!-- Modal panel -->
+    <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md transition-opacity" onclick="closeModal()"></div>
     <div class="absolute inset-0 overflow-y-auto p-4 sm:p-8 grid place-items-center">
-      <div class="fade-in relative w-full max-w-2xl bg-white rounded-2xl shadow-pop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="pop-in relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl shadow-brand-900/25 overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <!-- Modal header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-600 to-brand-500 rounded-t-2xl">
-          <h2 id="modalTitle" class="text-white font-bold text-lg">Add New Courier</h2>
+        <div class="nav-gradient flex items-center justify-between px-6 py-5">
+          <div>
+            <h2 id="modalTitle" class="text-white font-bold text-lg">Add New Courier</h2>
+            <p class="text-blue-100/80 text-xs mt-0.5">Fields marked <span class="text-red-200 font-bold">*</span> are required</p>
+          </div>
           <button type="button" onclick="closeModal()" aria-label="Close"
-            class="text-blue-100 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition">
+            class="text-blue-100 hover:text-white p-2 rounded-xl hover:bg-white/10 active:scale-90 transition">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
               <path stroke-linecap="round" d="M6 18 18 6M6 6l12 12"/>
             </svg>
           </button>
         </div>
 
-        <!-- Modal body: the courier form -->
+        <!-- Modal body -->
         <form id="courierForm" novalidate class="px-6 py-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           <input type="hidden" id="courierId" />
 
           <div>
-            <label for="f_fullName" class="block text-xs font-semibold text-slate-600 mb-1.5">Full Name <span class="text-red-500">*</span></label>
+            <label for="f_fullName" class="label">Full Name <span class="text-red-500">*</span></label>
             <input id="f_fullName" type="text" placeholder="e.g. أحمد محمد / Ahmed Mohamed" class="field" />
             <p class="err hidden"></p>
           </div>
 
           <div>
-            <label for="f_phone" class="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number <span class="text-red-500">*</span></label>
+            <label for="f_phone" class="label">Phone Number <span class="text-red-500">*</span></label>
             <input id="f_phone" type="tel" dir="ltr" placeholder="01xxxxxxxxx" class="field" />
             <p class="err hidden"></p>
           </div>
 
           <div>
-            <label for="f_nationalId" class="block text-xs font-semibold text-slate-600 mb-1.5">National ID <span class="text-red-500">*</span></label>
+            <label for="f_nationalId" class="label">National ID <span class="text-red-500">*</span></label>
             <input id="f_nationalId" type="text" inputmode="numeric" maxlength="14" dir="ltr" placeholder="14-digit ID" class="field num" />
             <p class="err hidden"></p>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="f_branch" class="block text-xs font-semibold text-slate-600 mb-1.5">Branch <span class="text-red-500">*</span></label>
+              <label for="f_branch" class="label">Branch <span class="text-red-500">*</span></label>
               <select id="f_branch" class="field">
                 <option value="">Select…</option>
                 <option value="QCD1">QCD1</option>
@@ -231,7 +291,7 @@
               <p class="err hidden"></p>
             </div>
             <div>
-              <label for="f_type" class="block text-xs font-semibold text-slate-600 mb-1.5">Employment Type <span class="text-red-500">*</span></label>
+              <label for="f_type" class="label">Employment Type <span class="text-red-500">*</span></label>
               <select id="f_type" class="field">
                 <option value="">Select…</option>
                 <option value="Full Time">Full Time</option>
@@ -243,35 +303,37 @@
 
           <div class="grid grid-cols-2 gap-3 sm:col-span-2">
             <div>
-              <label for="f_licenseStart" class="block text-xs font-semibold text-slate-600 mb-1.5">Personal License Start Date <span class="text-red-500">*</span></label>
+              <label for="f_licenseStart" class="label">Personal License Start Date <span class="text-red-500">*</span></label>
               <input id="f_licenseStart" type="date" class="field" />
               <p class="err hidden"></p>
             </div>
             <div>
-              <label for="f_licenseEnd" class="block text-xs font-semibold text-slate-600 mb-1.5">License End Date <span class="text-red-500">*</span></label>
+              <label for="f_licenseEnd" class="label">License End Date <span class="text-red-500">*</span></label>
               <input id="f_licenseEnd" type="date" class="field" />
               <p class="err hidden"></p>
             </div>
           </div>
 
           <div>
-            <label for="f_outlook" class="block text-xs font-semibold text-slate-600 mb-1.5">Outlook Account <span class="text-slate-400">(optional)</span></label>
+            <label for="f_outlook" class="label">Outlook Account <span class="text-slate-400">(optional)</span></label>
             <input id="f_outlook" type="email" dir="ltr" placeholder="courier@company.com" class="field" />
             <p class="err hidden"></p>
           </div>
 
           <div>
-            <label for="f_plate" class="block text-xs font-semibold text-slate-600 mb-1.5">Motorcycle Plate Number <span class="text-slate-400">(optional)</span></label>
+            <label for="f_plate" class="label">Motorcycle Plate Number <span class="text-slate-400">(optional)</span></label>
             <input id="f_plate" type="text" dir="ltr" placeholder="e.g. ABC 123" class="field" />
             <p class="err hidden"></p>
           </div>
 
           <div class="sm:col-span-2">
-            <label for="f_status" class="block text-xs font-semibold text-slate-600 mb-1.5">Courier Status <span class="text-red-500">*</span></label>
+            <label for="f_status" class="label">Courier Status <span class="text-red-500">*</span></label>
             <select id="f_status" class="field">
               <option value="">Select…</option>
               <option value="Active">Active</option>
+              <option value="OnBoarding">OnBoarding</option>
               <option value="Inactive">Inactive</option>
+              <option value="OffBoarding">OffBoarding</option>
               <option value="Attended to D0">Attended to D0</option>
               <option value="Not Attended to D0">Not Attended to D0</option>
             </select>
@@ -279,12 +341,13 @@
           </div>
 
           <!-- Modal footer -->
-          <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-2 border-t border-slate-100 mt-1">
+          <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <button type="button" onclick="closeModal()"
-              class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+              class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 active:scale-95 transition">Cancel</button>
             <button type="submit" id="saveBtn"
-              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold shadow-sm active:scale-95 transition">
+              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-bold shadow-md hover:shadow-glow active:scale-95 transition-all">
               Save Courier
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
             </button>
           </div>
         </form>
@@ -294,11 +357,11 @@
 
   <!-- ============================= DELETE CONFIRMATION MODAL ============================= -->
   <div id="deleteOverlay" class="hidden fixed inset-0 z-50">
-    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeDelete()"></div>
+    <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md" onclick="closeDelete()"></div>
     <div class="absolute inset-0 grid place-items-center p-4">
-      <div class="fade-in relative bg-white rounded-2xl shadow-pop max-w-sm w-full p-6 text-center" role="dialog" aria-modal="true">
-        <div class="w-12 h-12 rounded-full bg-red-50 grid place-items-center mx-auto mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+      <div class="pop-in relative bg-white rounded-3xl shadow-2xl shadow-brand-900/25 max-w-sm w-full p-6 text-center" role="dialog" aria-modal="true">
+        <div class="w-14 h-14 rounded-2xl bg-red-50 grid place-items-center mx-auto mb-4 ring-1 ring-red-100">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 3.5h.01M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3l-7.7-13.5a2 2 0 0 0-3.4 0Z"/>
           </svg>
         </div>
@@ -306,28 +369,34 @@
         <p id="deleteMsg" class="text-sm text-slate-500 mt-1.5 mb-5"></p>
         <div class="flex items-center justify-center gap-3">
           <button type="button" onclick="closeDelete()"
-            class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition">Cancel</button>
+            class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 active:scale-95 transition">Cancel</button>
           <button type="button" onclick="confirmDelete()"
-            class="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-sm active:scale-95 transition">Delete</button>
+            class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white text-sm font-bold shadow-md hover:shadow-red-500/30 active:scale-95 transition-all">Delete</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ============================= TOAST NOTIFICATIONS ============================= -->
+  <!-- ============================= TOASTS ============================= -->
   <div id="toastStack" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[calc(100%-2rem)] max-w-xs"></div>
 
   <!-- Shared input styling injected once -->
   <style>
+    .label { display:block; font-size: 0.72rem; font-weight: 600; color:#475569; margin-bottom:0.4rem; }
     .field {
-      width: 100%; padding: 0.65rem 0.85rem; border-radius: 0.75rem;
+      width: 100%; padding: 0.65rem 0.85rem; border-radius: 0.85rem;
       border: 1px solid #E2E8F0; background: #F8FAFC; font-size: 0.875rem; color: #0F172A;
-      transition: border-color .15s, box-shadow .15s, background .15s;
+      transition: border-color .15s, box-shadow .15s, background .15s, transform .15s;
     }
-    .field:focus { outline: none; background: #fff; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .25); }
+    .field:focus { outline: none; background: #fff; border-color: #2563EB; box-shadow: 0 0 0 4px rgba(37, 99, 235, .18); }
     .field.invalid { border-color: #EF4444; background: #FEF2F2; }
     .err { color: #DC2626; font-size: 0.72rem; margin-top: 0.3rem; font-weight: 500; }
-    .border-3 { border-width: 3px; }
+    /* Badge chip for quick status select */
+    .status-select {
+      text-overflow: ellipsis;
+      appearance: auto;
+    }
+    .status-select:hover { filter: brightness(.97); }
   </style>
 
   <script>
@@ -335,27 +404,28 @@
 
     /* ============================================================
        Bankai-Hiring — Frontend Logic (Vanilla JS + REST API)
-       The data lives in a SQLite database on the server; this file
-       talks to it through /api/couriers endpoints.
+       Data lives in SQLite (Railway Volume). All UI state helpers,
+       sort/filter/export/duplicate features live in this file.
        ============================================================ */
 
     /* ------------------------- Constants & helpers ------------------------- */
 
     const STATUS_META = {
-      'Active':              { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',    dot: 'bg-emerald-500' },
-      'Inactive':            { badge: 'bg-slate-100 text-slate-600 ring-slate-500/20',         dot: 'bg-slate-400' },
-      'Attended to D0':      { badge: 'bg-brand-50 text-brand-600 ring-blue-600/20',           dot: 'bg-brand-500' },
-      'Not Attended to D0':  { badge: 'bg-amber-50 text-amber-700 ring-amber-600/20',          dot: 'bg-amber-500' }
+      'Active':              { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',    dot: 'bg-emerald-500',    cardAccent: 'from-emerald-400 to-teal-500',   chip: 'bg-emerald-50 text-emerald-600' },
+      'OnBoarding':          { badge: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',      dot: 'bg-indigo-500',     cardAccent: 'from-indigo-400 to-blue-500',    chip: 'bg-indigo-50 text-indigo-600' },
+      'Inactive':            { badge: 'bg-slate-100 text-slate-600 ring-slate-500/20',        dot: 'bg-slate-400',      cardAccent: 'from-slate-300 to-slate-400',    chip: 'bg-slate-100 text-slate-600' },
+      'OffBoarding':         { badge: 'bg-rose-50 text-rose-700 ring-rose-600/20',            dot: 'bg-rose-500',       cardAccent: 'from-rose-400 to-red-500',       chip: 'bg-rose-50 text-rose-600' },
+      'Attended to D0':      { badge: 'bg-brand-50 text-brand-600 ring-blue-600/20',          dot: 'bg-brand-500',      cardAccent: 'from-blue-400 to-brand-500',     chip: 'bg-blue-50 text-blue-600' },
+      'Not Attended to D0':  { badge: 'bg-amber-50 text-amber-700 ring-amber-600/20',          dot: 'bg-amber-500',      cardAccent: 'from-amber-400 to-orange-500',   chip: 'bg-amber-50 text-amber-600' }
     };
     const STATUSES = Object.keys(STATUS_META);
 
     const qs = (sel) => document.querySelector(sel);
     const esc = (str) => String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const escAttr = esc; // same escaping works inside attributes we control
+    const escAttr = esc;
 
-    const isArabic = (str) => /[\u0600-\u06FF]/.test(str); // detect Arabic text to switch font
+    const isArabic = (str) => /[\u0600-\u06FF]/.test(str);
 
-    /** Days from today until `dateStr` (negative if in the past). */
     const daysUntil = (dateStr) => {
       if (!dateStr) return null;
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -367,15 +437,19 @@
       ? new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
       : '—';
 
-    /** Licenses expiring within this many days are flagged "expiring soon". */
     const EXPIRY_SOON_DAYS = 30;
+    const isExpired = (r) => { const d = daysUntil(r.licenseEnd); return d !== null && d < 0; };
+    const isExpiringSoon = (r) => { const d = daysUntil(r.licenseEnd); return d !== null && d >= 0 && d <= EXPIRY_SOON_DAYS; };
 
-    /* ------------------------- State & API layer ------------------------- */
+    /* ------------------------- UI state ------------------------- */
 
-    let state = [];            // couriers from the server DB
+    let state = [];
     let deleteTargetId = null;
+    let sort = { field: null, dir: 1 };      // click column headers to sort
+    let cardFilter = { status: null, expiring: false }; // summary cards double as filter chips
 
-    /** Tiny REST client with JSON + error propagation. */
+    /* ------------------------- API layer ------------------------- */
+
     async function api(path, options = {}) {
       const res = await fetch('/api' + path, {
         headers: { 'Content-Type': 'application/json' },
@@ -389,9 +463,10 @@
       return body;
     }
 
-    /** Initial + refresh load from the database. */
     async function refresh() {
       qs('#loadingState').classList.remove('hidden');
+      qs('#tableBody').innerHTML = '';
+      qs('#emptyState').classList.add('hidden');
       try {
         state = await api('/couriers');
         rerender();
@@ -402,52 +477,217 @@
       }
     }
 
-    /* ------------------------- Rendering ------------------------- */
+    /* ------------------------- Summary cards ------------------------- */
 
-    /** Small SVG icon markup reused across summary cards. */
     const icon = (path) =>
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="${path}"/></svg>`;
 
-    function renderSummary() {
-      const rows = state;
-      const active = rows.filter(r => r.status === 'Active').length;
-      const attended = rows.filter(r => r.status === 'Attended to D0').length;
-      const notAttended = rows.filter(r => r.status === 'Not Attended to D0').length;
-      const expiring = rows.filter(r => { const d = daysUntil(r.licenseEnd); return d !== null && d <= EXPIRY_SOON_DAYS; }).length;
-
-      const cards = [
-        { label: 'Total Couriers',    value: rows.length,        icon: icon('M12 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM5 20a7 7 0 0 1 14 0'), accent: 'bg-brand-50 text-brand-600' },
-        { label: 'Active',            value: active,             icon: icon('M5 13l4 4L19 7'),                                        accent: 'bg-emerald-50 text-emerald-600' },
-        { label: 'Attended to D0',    value: attended,           icon: icon('M9 12l2 2 4-4M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'),     accent: 'bg-brand-50 text-brand-600' },
-        { label: 'Not Attended to D0',value: notAttended,        icon: icon('M12 9v4m0 3.5h.01M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'), accent: 'bg-amber-50 text-amber-600' },
-        { label: 'Licenses Expiring', value: expiring,           icon: icon('M12 8v4l2.5 2.5M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'),   accent: 'bg-red-50 text-red-600' }
-      ];
-
-      qs('#summaryCards').innerHTML = cards.map(c => `
-        <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-4 sm:p-5 flex items-center gap-3.5">
-          <div class="w-11 h-11 rounded-xl grid place-items-center shrink-0 ${c.accent}">${c.icon}</div>
-          <div class="min-w-0">
-            <p class="text-[11px] sm:text-xs font-medium text-slate-500 uppercase tracking-wide truncate">${c.label}</p>
-            <p class="text-2xl sm:text-[1.65rem] font-extrabold text-ink num leading-tight">${c.value}</p>
-          </div>
-        </div>
-      `).join('');
+    /** Animated number counter: eases last value -> new value. */
+    const lastValues = {};
+    function animatedValue(key, target) {
+      const from = lastValues[key] ?? target;
+      lastValues[key] = target;
+      if (from === target) return target;
+      return `<span data-count="${target}" data-from="${from}" class="counting num">${from}</span>`;
     }
 
-    /** License cell: dates + visual badge when expired or expiring soon. */
+    function animateCounters(root = document) {
+      root.querySelectorAll('.counting').forEach(el => {
+        const to = +el.dataset.count, from = +el.dataset.from;
+        const t0 = performance.now(), dur = 550;
+        const tick = (t) => {
+          const p = Math.min((t - t0) / dur, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = Math.round(from + (to - from) * eased);
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+    }
+
+    function renderSummary() {
+      const byStatus = (s) => state.filter(r => r.status === s).length;
+      const expiring = state.filter(r => isExpired(r) || isExpiringSoon(r)).length;
+
+      const cards = [
+        { key: null,   label: 'Total Couriers',     value: state.length,                          icon: icon('M12 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM5 20a7 7 0 0 1 14 0'), accent: 'from-brand-500 to-brand-600',   chip: 'bg-brand-50 text-brand-600' },
+        { key: 'Active',            label: 'Active',             value: byStatus('Active'),             icon: icon('M5 13l4 4L19 7'),                        accent: 'from-emerald-400 to-teal-500',  chip: 'bg-emerald-50 text-emerald-600' },
+        { key: 'OnBoarding',        label: 'OnBoarding',         value: byStatus('OnBoarding'),         icon: icon('M12 19V5m0 0l-6 6m6-6l6 6'),             accent: 'from-indigo-400 to-blue-500',   chip: 'bg-indigo-50 text-indigo-600' },
+        { key: 'OffBoarding',       label: 'OffBoarding',        value: byStatus('OffBoarding'),        icon: icon('M12 5v14m0 0l6-6m-6 6l-6-6'),            accent: 'from-rose-400 to-red-500',      chip: 'bg-rose-50 text-rose-600' },
+        { key: 'Attended to D0',    label: 'Attended to D0',     value: byStatus('Attended to D0'),     icon: icon('M9 12l2 2 4-4M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'),   accent: 'from-blue-400 to-brand-500',    chip: 'bg-blue-50 text-blue-600' },
+        { key: 'Not Attended to D0',label: 'Not Attended to D0', value: byStatus('Not Attended to D0'), icon: icon('M12 9v4m0 3.5h.01M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'), accent: 'from-amber-400 to-orange-500',  chip: 'bg-amber-50 text-amber-600' },
+        { key: 'expiring',          label: 'Licenses Expiring',  value: expiring,                        icon: icon('M12 8v4l2.5 2.5M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'), accent: 'from-red-400 to-rose-500',      chip: 'bg-red-50 text-red-600' }
+      ];
+
+      qs('#summaryCards').innerHTML = cards.map(c => {
+        const isActive = c.key ? cardFilter.status === c.key || (c.key === 'expiring' && cardFilter.expiring) : false;
+        return `
+        <button type="button" onclick="toggleCard('${escAttr(c.key ?? '')}')" data-card="${escAttr(c.key ?? '')}"
+          class="card-btn group relative text-left bg-white/85 rounded-2xl shadow-card border border-white/80 p-4 flex items-center gap-3.5
+                 hover:-translate-y-1 hover:shadow-pop active:translate-y-0 transition-all duration-300 ${isActive ? 'ring-2 ring-brand-500 shadow-glow' : ''}">
+          <span class="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r ${c.accent}"></span>
+          <div class="w-11 h-11 rounded-xl grid place-items-center shrink-0 ${c.chip} ring-1 ring-black/5 group-hover:scale-110 transition-transform duration-300">${c.icon}</div>
+          <div class="min-w-0">
+            <p class="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate">${c.label}</p>
+            <p class="text-2xl sm:text-[1.65rem] font-extrabold text-ink leading-tight">${animatedValue(c.label, c.value)}</p>
+          </div>
+        </button>`;
+      }).join('');
+
+      animateCounters();
+    }
+
+    /** Summary cards act as quick filters. */
+    function toggleCard(key) {
+      if (!key) { // "Total" card resets filters
+        cardFilter = { status: null, expiring: false };
+      } else if (key === 'expiring') {
+        cardFilter.expiring = !cardFilter.expiring;
+      } else if (cardFilter.status === key) {
+        cardFilter.status = null;
+      } else {
+        cardFilter.status = key;
+        cardFilter.expiring = false;
+      }
+      // Keep the toolbar <select> in sync for status filters
+      qs('#filterStatus').value = cardFilter.status ?? '';
+      renderSummary();
+      renderTable();
+    }
+
+    /* ------------------------- Table rendering ------------------------- */
+
+    function getFiltered() {
+      const q = qs('#searchInput').value.trim().toLowerCase();
+      const branch = qs('#filterBranch').value;
+      const type = qs('#filterType').value;
+      const status = cardFilter.status || qs('#filterStatus').value;
+
+      return state.filter(r => {
+        const matchesQ = !q ||
+          r.fullName.toLowerCase().includes(q) ||
+          r.phone.toLowerCase().includes(q) ||
+          r.nationalId.includes(q) ||
+          (r.plate || '').toLowerCase().includes(q);
+        const matchesExpiring = !cardFilter.expiring || isExpired(r) || isExpiringSoon(r);
+        return matchesQ && matchesExpiring &&
+          (!branch || r.branch === branch) &&
+          (!type || r.employmentType === type) &&
+          (!status || r.status === status);
+      });
+    }
+
+    function applySort(list) {
+      if (!sort.field) return list;
+      const val = (r) => {
+        const v = r[sort.field];
+        return typeof v === 'string' ? v.toLowerCase() : v;
+      };
+      return [...list].sort((a, b) => {
+        const x = val(a) ?? '', y = val(b) ?? '';
+        return x < y ? -1 * sort.dir : x > y ? sort.dir : 0;
+      });
+    }
+
     function licenseCell(r) {
-      const d = daysUntil(r.licenseEnd);
       let badge = '';
-      if (d !== null && d < 0) {
+      if (isExpired(r)) {
         badge = `<span class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 ring-1 ring-red-500/20">⚠ Expired</span>`;
-      } else if (d !== null && d <= EXPIRY_SOON_DAYS) {
-        badge = `<span class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-500/20">Expiring in ${d}d</span>`;
+      } else if (isExpiringSoon(r)) {
+        badge = `<span class="mt-1 animate-pulse inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-500/20">Expiring in ${Math.max(daysUntil(r.licenseEnd), 0)}d</span>`;
       }
       return `
         <div class="leading-tight">
-          <p class="num text-slate-700 text-xs font-medium">${fmtDate(r.licenseStart)} → ${fmtDate(r.licenseEnd)}</p>
+          <p class="num text-slate-700 text-xs font-medium whitespace-nowrap">${fmtDate(r.licenseStart)} → ${fmtDate(r.licenseEnd)}</p>
           ${badge}
         </div>`;
+    }
+
+    function renderTable() {
+      const list = applySort(getFiltered());
+      const nameFont = s => isArabic(s) ? 'font-arabic' : '';
+
+      // Sort indicators in the header
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        if (th.dataset.sort === sort.field && sort.field) {
+          th.setAttribute('data-sorted', '');
+          th.querySelector('.sort-arrow')?.remove();
+          th.insertAdjacentHTML('beforeend', `<span class="sort-arrow ml-1 inline-block">${sort.dir === 1 ? '↑' : '↓'}</span>`);
+        } else {
+          th.removeAttribute('data-sorted');
+          th.querySelector('.sort-arrow')?.remove();
+        }
+      });
+
+      qs('#tableBody').innerHTML = list.map((r, i) => `
+        <tr class="row-anim hover:bg-brand-50/50 transition-colors" style="animation-delay:${Math.min(i * 28, 350)}ms">
+          <!-- Courier -->
+          <td class="px-4 py-3.5">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white grid place-items-center text-xs font-bold shrink-0 shadow-sm
+                          group-hover:scale-110 transition">${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}</div>
+              <div class="min-w-0">
+                <p class="font-semibold text-ink truncate ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</p>
+                <p class="text-[11px] text-slate-400 num lg:hidden">${esc(r.nationalId)}</p>
+              </div>
+            </div>
+          </td>
+          <!-- Phone -->
+          <td class="px-4 py-3.5">
+            <a href="tel:${escAttr(r.phone)}" class="num text-slate-700 hover:text-brand-600 font-medium transition-colors" dir="ltr">${esc(r.phone)}</a>
+          </td>
+          <!-- National ID -->
+          <td class="px-4 py-3.5 hidden lg:table-cell"><span class="num text-slate-600">${esc(r.nationalId)}</span></td>
+          <!-- Branch -->
+          <td class="px-4 py-3.5">
+            <span class="inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-lg bg-brand-50 text-brand-600 ring-1 ring-blue-600/10">QCD<span class="num">${esc(r.branch.slice(-1))}</span></span>
+          </td>
+          <!-- Employment type -->
+          <td class="px-4 py-3.5 hidden md:table-cell">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>
+          </td>
+          <!-- License -->
+          <td class="px-4 py-3.5">${licenseCell(r)}</td>
+          <!-- Plate -->
+          <td class="px-4 py-3.5 hidden xl:table-cell"><span class="num text-slate-700 font-medium">${esc(r.plate) || '—'}</span></td>
+          <!-- Outlook -->
+          <td class="px-4 py-3.5 hidden xl:table-cell max-w-[180px]">
+            ${r.outlook
+              ? `<a href="mailto:${escAttr(r.outlook)}" class="text-xs text-slate-600 hover:text-brand-600 truncate block transition-colors" dir="ltr" title="${escAttr(r.outlook)}">${esc(r.outlook)}</a>`
+              : '<span class="text-slate-300 text-xs">—</span>'}
+          </td>
+          <!-- Quick status change -->
+          <td class="px-4 py-3.5">
+            <select name="status-select-${escAttr(r.id)}" onchange="quickStatus('${r.id}', this.value)"
+              class="status-select text-xs font-semibold py-1.5 pl-2.5 pr-7 rounded-lg border-0 cursor-pointer transition-all focus:ring-2 focus:ring-brand-500/50 focus:outline-none ${STATUS_META[r.status]?.badge ?? ''}">
+              ${STATUSES.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <div class="mt-1 sm:hidden">${statusBadge(r.status)}</div>
+          </td>
+          <!-- Actions -->
+          <td class="px-4 py-3.5 text-right">
+            <div class="inline-flex items-center gap-0.5 opacity-80 hover:opacity-100 transition-opacity">
+              <button type="button" onclick='openModal("${r.id}")' title="Edit"
+                class="p-2 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 active:scale-90 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
+              </button>
+              <button type="button" onclick="openCopy('${r.id}')" title="Duplicate"
+                class="hidden sm:block p-2 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 active:scale-90 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 8V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3m-11 0V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1Z"/></svg>
+              </button>
+              <button type="button" onclick="askDelete('${r.id}')" title="Delete"
+                class="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 active:scale-90 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      qs('#emptyState').classList.toggle('hidden', list.length !== 0);
+      const filteredCount = list.length;
+      qs('#resultCount').textContent = `Showing ${filteredCount} of ${state.length} courier record${state.length === 1 ? '' : 's'}${cardFilter.expiring ? ' · expiring licenses only' : ''}${sort.field ? ` · sorted by ${sort.field}` : ''}`;
+      qs('#navCount').textContent = `${state.length} records`;
     }
 
     function statusBadge(status) {
@@ -460,116 +700,68 @@
         </div>`;
     }
 
-    function renderTable() {
-      const list = getFiltered();
-
-      const nameFont = s => isArabic(s) ? 'font-arabic' : '';
-
-      qs('#tableBody').innerHTML = list.map(r => `
-        <tr class="hover:bg-brand-50/40 transition-colors">
-          <!-- Courier: avatar initials + name + national id on mobile -->
-          <td class="px-4 py-3.5">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-full bg-brand-600 text-white grid place-items-center text-xs font-bold shrink-0">
-                ${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}
-              </div>
-              <div class="min-w-0">
-                <p class="font-semibold text-ink truncate ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</p>
-                <p class="text-[11px] text-slate-400 num lg:hidden">${esc(r.nationalId)}</p>
-              </div>
-            </div>
-          </td>
-          <!-- Phone -->
-          <td class="px-4 py-3.5">
-            <a href="tel:${escAttr(r.phone)}" class="num text-slate-700 hover:text-brand-600 font-medium" dir="ltr">${esc(r.phone)}</a>
-          </td>
-          <!-- National ID (desktop only) -->
-          <td class="px-4 py-3.5 hidden lg:table-cell"><span class="num text-slate-600">${esc(r.nationalId)}</span></td>
-          <!-- Branch -->
-          <td class="px-4 py-3.5">
-            <span class="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg bg-brand-50 text-brand-600 ring-1 ring-blue-600/10">QCD</span>
-            <span class="num font-bold text-ink ml-1">${esc(r.branch)}</span>
-          </td>
-          <!-- Employment type (md+) -->
-          <td class="px-4 py-3.5 hidden md:table-cell">
-            <span class="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>
-          </td>
-          <!-- License -->
-          <td class="px-4 py-3.5">${licenseCell(r)}</td>
-          <!-- Plate (xl+) -->
-          <td class="px-4 py-3.5 hidden xl:table-cell"><span class="num text-slate-700 font-medium">${esc(r.plate) || '—'}</span></td>
-          <!-- Outlook (xl+) -->
-          <td class="px-4 py-3.5 hidden xl:table-cell max-w-[180px]">
-            ${r.outlook
-              ? `<a href="mailto:${escAttr(r.outlook)}" class="text-xs text-slate-600 hover:text-brand-600 truncate block" dir="ltr" title="${escAttr(r.outlook)}">${esc(r.outlook)}</a>`
-              : '<span class="text-slate-300 text-xs">—</span>'}
-          </td>
-          <!-- Quick status change (inline dropdown) -->
-          <td class="px-4 py-3.5">
-            <label class="sr-only" aria-hidden="true">Change status</label>
-            <select onchange="quickStatus('${r.id}', this.value)"
-              class="text-xs font-semibold py-1.5 pl-2.5 pr-7 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-brand-500/50 focus:outline-none ${STATUS_META[r.status]?.badge ?? ''} bg-clip-padding">
-              ${STATUSES.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
-            </select>
-            <div class="mt-1 sm:hidden">${statusBadge(r.status)}</div>
-          </td>
-          <!-- Actions -->
-          <td class="px-4 py-3.5 text-right">
-            <div class="inline-flex items-center gap-1">
-              <button type="button" onclick='openModal("${r.id}")' title="Edit"
-                class="p-2 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
-              </button>
-              <button type="button" onclick="askDelete('${r.id}')" title="Delete"
-                class="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `).join('');
-
-      // Empty state + count
-      qs('#emptyState').classList.toggle('hidden', list.length !== 0);
-      qs('#resultCount').textContent = `Showing ${list.length} of ${state.length} courier record${state.length === 1 ? '' : 's'}`;
-      qs('#navCount').textContent = `${state.length} records`;
-    }
-
     const rerender = () => { renderSummary(); renderTable(); };
 
-    /* ------------------------- Search & filters ------------------------- */
-
-    function getFiltered() {
-      const q = qs('#searchInput').value.trim().toLowerCase();
-      const branch = qs('#filterBranch').value;
-      const type = qs('#filterType').value;
-      const status = qs('#filterStatus').value;
-
-      return state.filter(r => {
-        const matchesQ = !q ||
-          r.fullName.toLowerCase().includes(q) ||
-          r.phone.toLowerCase().includes(q) ||
-          r.nationalId.includes(q) ||
-          (r.plate || '').toLowerCase().includes(q);
-        return matchesQ &&
-          (!branch || r.branch === branch) &&
-          (!type || r.employmentType === type) &&
-          (!status || r.status === status);
-      });
-    }
+    /* ------------------------- Search / filters / sort ------------------------- */
 
     qs('#searchInput').addEventListener('input', renderTable);
     ['filterBranch', 'filterType', 'filterStatus'].forEach(id =>
-      qs('#' + id).addEventListener('change', renderTable));
-    qs('#resetFilters').addEventListener('click', () => {
+      qs('#' + id).addEventListener('change', e => {
+        if (id === 'filterStatus') cardFilter.status = e.target.value || null; // keep card highlight in sync
+        renderSummary();
+        renderTable();
+      }));
+
+    function resetAllFilters() {
       qs('#searchInput').value = '';
       ['filterBranch', 'filterType', 'filterStatus'].forEach(id => (qs('#' + id).value = ''));
-      renderTable();
+      cardFilter = { status: null, expiring: false };
+      sort = { field: null, dir: 1 };
+      rerender();
+    }
+
+    qs('#resetFilters').addEventListener('click', resetAllFilters);
+
+    // Column sorting
+    document.querySelectorAll('th[data-sort]').forEach(th =>
+      th.addEventListener('click', () => {
+        const f = th.dataset.sort;
+        sort = sort.field === f ? { field: f, dir: -sort.dir } : { field: f, dir: 1 };
+        renderTable();
+      }));
+
+    /* ------------------------- CSV export ------------------------- */
+
+    qs('#exportCsv').addEventListener('click', () => {
+      const rows = applySort(getFiltered());
+      if (!rows.length) return toast('Nothing to export with the current filters.', 'error');
+
+      const cols = [
+        ['Full Name', r => r.fullName], ['Phone', r => r.phone], ['National ID', r => r.nationalId],
+        ['Branch', r => r.branch], ['Employment Type', r => r.employmentType],
+        ['License Start', r => r.licenseStart], ['License End', r => r.licenseEnd],
+        ['Outlook', r => r.outlook], ['Plate', r => r.plate], ['Status', r => r.status]
+      ];
+      const csv = [
+        cols.map(c => c[0]).join(','),
+        ...rows.map(r => cols.map(c => {
+          const v = String(c[1](r) ?? '');
+          return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+        }).join(','))
+      ].join('\n');
+
+      // BOM so Excel renders Arabic correctly
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `bankai-hiring-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast(`Exported ${rows.length} record${rows.length === 1 ? '' : 's'} to CSV.`, 'success');
     });
 
     /* ------------------------- CRUD ------------------------- */
 
-    /** Open the modal. With `id` -> edit mode (prefill), without -> add mode. */
     async function openModal(id) {
       const form = qs('#courierForm');
       form.reset();
@@ -580,19 +772,39 @@
         const r = state.find(x => x.id === id);
         if (!r) return toast('Record not found.', 'error');
         qs('#modalTitle').textContent = 'Edit Courier';
-        Object.entries({
-          f_fullName: r.fullName, f_phone: r.phone, f_nationalId: r.nationalId,
-          f_branch: r.branch, f_type: r.employmentType,
-          f_licenseStart: r.licenseStart, f_licenseEnd: r.licenseEnd,
-          f_outlook: r.outlook, f_plate: r.plate, f_status: r.status
-        }).forEach(([elId, val]) => { qs('#' + elId).value = val || ''; });
+        fillForm(r);
       } else {
         qs('#modalTitle').textContent = 'Add New Courier';
       }
 
       qs('#modalOverlay').classList.remove('hidden');
-      document.body.style.overflow = 'hidden'; // lock page scroll behind modal
+      document.body.style.overflow = 'hidden';
       qs('#f_fullName').focus();
+    }
+
+    /** Duplicate a record: opens the "add" form prefilled with existing values. */
+    function openCopy(id) {
+      const r = state.find(x => x.id === id);
+      if (!r) return toast('Record not found.', 'error');
+      qs('#courierForm').reset();
+      clearFieldErrors();
+      qs('#courierId').value = '';
+      qs('#modalTitle').textContent = 'Add Courier (Duplicate)';
+      fillForm({ ...r, fullName: r.fullName, plate: r.plate });
+      qs('#modalOverlay').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      qs('#f_nationalId').focus(); // must be changed before saving (unique)
+      qs('#f_nationalId').select();
+      toast('Record duplicated — National ID must be edited before saving.', 'success');
+    }
+
+    function fillForm(r) {
+      Object.entries({
+        f_fullName: r.fullName, f_phone: r.phone, f_nationalId: r.nationalId,
+        f_branch: r.branch, f_type: r.employmentType,
+        f_licenseStart: r.licenseStart, f_licenseEnd: r.licenseEnd,
+        f_outlook: r.outlook, f_plate: r.plate, f_status: r.status
+      }).forEach(([elId, val]) => { qs('#' + elId).value = val || ''; });
     }
 
     function closeModal() {
@@ -600,7 +812,6 @@
       document.body.style.overflow = '';
     }
 
-    /** Quick status change straight from the table row. */
     async function quickStatus(id, status) {
       try {
         const updated = await api(`/couriers/${id}/status`, {
@@ -613,7 +824,7 @@
         toast(`Status updated to "${status}"`, 'success');
       } catch (err) {
         toast(err.message, 'error');
-        rerender(); // restore the previous selection
+        rerender(); // restore previous selection
       }
     }
 
@@ -666,42 +877,27 @@
       const id = qs('#courierId').value;
       const btn = qs('#saveBtn');
       btn.disabled = true;
-      btn.classList.add('opacity-60');
+      btn.classList.add('opacity-60', 'pointer-events-none');
 
       try {
         if (id) {
-          const updated = await api(`/couriers/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(payload)
-          });
+          const updated = await api(`/couriers/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
           const idx = state.findIndex(r => r.id === id);
           if (idx !== -1) state[idx] = updated;
           toast('Courier record updated.', 'success');
         } else {
-          const created = await api('/couriers', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
+          const created = await api('/couriers', { method: 'POST', body: JSON.stringify(payload) });
           state.unshift(created);
           toast('New courier added.', 'success');
         }
         closeModal();
         rerender();
       } catch (err) {
-        const formErrors = {
-          fullName: 'fullName', phone: 'phone', nationalId: 'nationalId', branch: 'branch',
-          type: 'employmentType' in payload ? 'type' : 'type',
-          licenseStart: 'licenseStart', licenseEnd: 'licenseEnd', outlook: 'outlook', status: 'status'
-        };
-        if (err.errors && err.errors.type) err.errors.type = err.errors.type; // server key "type"
-        // Map server error keys to inputs (server uses: fullName, phone, nationalId, branch, type, licenseStart, licenseEnd, outlook, status)
-        if (err.errors) {
-          showFieldErrors(err.errors);
-        }
+        if (err.errors) showFieldErrors(err.errors); // map server errors to inputs
         toast(err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.classList.remove('opacity-60');
+        btn.classList.remove('opacity-60', 'pointer-events-none');
       }
     });
 
@@ -746,23 +942,27 @@
 
     /* ------------------------- Toasts & keyboard ------------------------- */
 
-    /** Show a short-lived toast notification. type: 'success' | 'error' */
     function toast(message, type = 'success') {
-      const palette = { success: 'bg-emerald-600', error: 'bg-red-600' }[type] || 'bg-slate-800';
+      const cfg = {
+        success: { color: 'bg-gradient-to-r from-emerald-500 to-teal-600', ico: 'M5 13l4 4L19 7' },
+        error:   { color: 'bg-gradient-to-r from-red-500 to-rose-600',      ico: 'M6 18 18 6M6 6l12 12' },
+        info:    { color: 'bg-gradient-to-r from-brand-500 to-brand-600',   ico: 'M12 8h.01M11 12h1v4h1' }
+      }[type] || {};
       const el = document.createElement('div');
-      el.className = `fade-in flex items-start gap-2.5 ${palette} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-pop`;
+      el.className = `toast-anim flex items-center gap-2.5 ${cfg.color} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-pop`;
       el.setAttribute('role', 'status');
-      el.textContent = message;
+      el.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" class="w-4 h-4 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="${cfg.ico}"/></svg>
+        <span class="min-w-0 flex-1">${esc(message)}</span>`;
       qs('#toastStack').appendChild(el);
       setTimeout(() => {
         el.style.transition = 'opacity .3s, transform .3s';
         el.style.opacity = '0';
-        el.style.transform = 'translateY(6px)';
+        el.style.transform = 'translateY(8px) scale(.97)';
         setTimeout(() => el.remove(), 320);
-      }, 2600);
+      }, 2800);
     }
 
-    // Keyboard shortcuts: Esc closes modals
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (!qs('#deleteOverlay').classList.contains('hidden')) closeDelete();
@@ -770,6 +970,12 @@
     });
 
     /* ------------------------- Boot ------------------------- */
+
+    // Populate status filter <select> from STATUS_META (single source of truth)
+    qs('#filterStatus').innerHTML =
+      '<option value="">All Statuses</option>' +
+      STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
+
     refresh();
   </script>
 </body>

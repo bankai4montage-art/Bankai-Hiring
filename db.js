@@ -135,7 +135,8 @@ export function seedIfEmpty() {
     { fullName: 'أحمد محمد سعيد',      phone: '01012345678', nationalId: '29901011234567', branch: 'QCD1', employmentType: 'Full Time', licenseStart: '2024-11-01', licenseEnd: '2025-10-31', outlook: 'ahmed.saeed@bankai.com',    plate: 'ABC 123', status: 'Active' },
     { fullName: 'Youssef Khaled',      phone: '01123456789', nationalId: '30005051234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-06-15', licenseEnd: '2026-06-14', outlook: 'youssef.k@bankai.com',     plate: 'XYZ 456', status: 'Attended to D0' },
     { fullName: 'محمود علي حسن',       phone: '01234567890', nationalId: '29803031234567', branch: 'QCD1', employmentType: 'Full Time', licenseStart: '2024-01-10', licenseEnd: '2025-01-09', outlook: 'mahmoud.hassan@bankai.com', plate: 'JKL 789', status: 'Inactive' },
-    { fullName: 'Omar Tarek',          phone: '01098765432', nationalId: '30109101234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-09-01', licenseEnd: '2026-09-30', outlook: '',                          plate: 'MNO 321', status: 'Not Attended to D0' }
+    { fullName: 'Omar Tarek',          phone: '01098765432', nationalId: '30109101234567', branch: 'QCD2', employmentType: 'Part Time', licenseStart: '2025-09-01', licenseEnd: '2026-09-30', outlook: '',                          plate: 'MNO 321', status: 'OnBoarding' },
+    { fullName: 'Mostafa Gamal',       phone: '01555555555', nationalId: '30107071234567', branch: 'QCD2', employmentType: 'Full Time', licenseStart: '2024-02-01', licenseEnd: '2024-12-31', outlook: 'mostafa.g@bankai.com',     plate: 'QRS 654', status: 'OffBoarding' }
   ];
   seed.forEach(d => db.create(d));
   console.log(`🌱 Seeded ${seed.length} demo courier records.`);
