@@ -1,53 +1,75 @@
-# �Courier Bankai-Hiring
+# Bankai-Hiring
 
-A modern, responsive single-page web application for managing **courier hiring** — records, branches, licenses, and status tracking. Built with **HTML5, Tailwind CSS (CDN), and Vanilla JavaScript** with zero broken dependencies.
+A modern, responsive full-stack web application for managing **courier hiring** — records, branches, licenses, and status tracking.
+
+- **Frontend:** HTML5 + Tailwind CSS (CDN) + Vanilla JS
+- **Backend:** Node.js (Express) REST API
+- **Database:** SQLite (better-sqlite3), persisted on a Railway Volume
+- **Live deployment:** https://bankai-hiring-production.up.railway.app
 
 ## 📁 Project Structure
 
 ```
 Bankai-Hiring/
-├── index.html    # The complete single-page application (layout, styles & logic)
-├── README.md     # This file
-└── LICENSE       # MIT license
+├── public/
+│   └── index.html   # Dashboard UI (Tailwind + Vanilla JS, talks to the REST API)
+├── server.js        # Express server: static frontend + REST endpoints
+├── db.js            # SQLite layer (schema, queries, 4-record seed on first boot)
+├── package.json     # Dependencies & start script
+├── railway.json     # Railway build/deploy config (NIXPACKS + npm start)
+├── README.md
+└── LICENSE          # MIT
 ```
 
 ## 🚀 How to Run
 
-No build step, no dependencies, no server required.
-
-**Option 1 — Just open it:**
-Double-click `index.html` (or open it in any modern browser: Chrome, Edge, Firefox, Safari).
-
-**Option 2 — Serve locally (recommended for development):**
+### Local (requires Node.js 22+)
 
 ```bash
-# Python 3
-python -m http.server 8000
-# then open http://localhost:8000
-
-# Or with Node.js
-npx serve .
+npm install
+npm start
+# open http://localhost:3000
 ```
 
-**Fully live version:** Open the GitHub Pages URL once enabled (Settings → Pages → deploy from branch `main` / root).
+The database file is created at `data/bankai-hiring.db` (set `DATABASE_PATH` to override). On first boot the server seeds 4 realistic demo records.
+
+### Railway (production)
+
+Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
+
+- Build: NIXPACKS → `npm start`
+- Persistent **Volume mounted at `/data`** with `DATABASE_PATH=/data/bankai-hiring.db` so records survive redeploys
+- Public domain: `bankai-hiring-production.up.railway.app`
+- Auto-deploys from the `main` branch of this repository
+
+## 🌐 REST API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/health` | Health check |
+| GET | `/api/couriers` | List all couriers |
+| POST | `/api/couriers` | Create (full validation, 400 + field errors on failure) |
+| PUT | `/api/couriers/:id` | Update a full record |
+| PATCH | `/api/couriers/:id/status` | Quick status change |
+| DELETE | `/api/couriers/:id` | Delete a record |
 
 ## ✨ Features
 
 ### Dashboard & Data
-- **Top navigation bar** with the project title and a global counter.
+- **Top navigation bar** with the project title, live record counter, and a "Live Database" indicator.
 - **Quick summary cards**: Total Couriers, Active, Attended to D0, Not Attended to D0, Licenses Expiring.
 - **Structured data table** with a responsive layout (columns gracefully collapse on smaller screens).
 - **Search bar**: search instantly by Name, Phone, National ID, or Plate Number.
 - **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), and Status.
 
 ### CRUD Operations
-- **Create** — a clean modal form to add a new courier record with full validation.
-- **Read** — table view with live search and filters.
+- **Create** — a clean modal form to add a new courier record with client + server validation.
+- **Read** — table view with live search and filters, data loaded from the REST API.
 - **Update**:
   - Edit any record via the same modal form (prefilled).
   - **Quick status change** directly from the table row (dropdown) for `Active` / `Inactive` / `Attended to D0` / `Not Attended to D0`.
 - **Delete** — removal with a confirmation prompt.
-- **Persistence** — data is saved to **LocalStorage** and survives page refreshes. On first visit, 4 realistic dummy records are seeded to showcase the UI.
+- **Persistence** — records are stored in a **SQLite database**; changes are durable across refreshes, devices, and redeploys.
 
 ### Courier Model — Fields & Validation
 
@@ -89,15 +111,15 @@ npx serve .
 
 | Layer | Choice |
 |---|---|
-| Markup | HTML5 |
-| Styling | Tailwind CSS via CDN (with a custom design-token config) |
-| Logic | Vanilla JavaScript (ES6+, modular & commented) |
-| Persistence | Browser LocalStorage |
+| Frontend | HTML5 + Tailwind CSS (CDN) + Vanilla JavaScript (ES6+, modular & commented) |
+| Backend | Node.js + Express (REST API) |
+| Database | SQLite via better-sqlite3 (WAL mode, schema-enforced) |
 | Fonts | Inter + Cairo (Google Fonts) |
+| Hosting | Railway (NIXPACKS build, `/data` volume) |
 
-## 🧪 Reset the Demo Data
+## 🧪 Reset the Demo Data (local)
 
-Open your browser DevTools → Application → Local Storage → delete the key `bankai-hiring:records`, then refresh — the 4 seed records will be recreated.
+Stop the server, delete `data/bankai-hiring.db*` files, start again — the 4 seed records will be recreated.
 
 ## 📄 License
 
