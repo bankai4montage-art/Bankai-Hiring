@@ -72,11 +72,12 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 ## ✨ Features
 
 ### Dashboard & Data
-- **Compact clickable cards** — each courier is a small, clean one-row card showing only the essentials: personal photo, name, national ID, branch, Full/Part time and status. Clicking the card opens the **full courier profile** — no data clutter, no horizontal scrolling.
-- **Top navigation bar** with the project title, live record counter, and a "Live Database" indicator.
-- **Quick summary cards**: Total Couriers, Active, OnBoarding, OffBoarding, Attended to D0, Not Attended to D0.
-- **Search bar**: search instantly by Name, Phone, National ID, or Plate Number.
-- **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), Status — plus a **Sort** selector (newest, name A→Z/Z→A, license expiring first, status, branch).
+- **App shell layout** — a fixed dark **sidebar** (brand, workspace navigation, live status overview with per-status counters, database footer) plus a sticky top bar (page context, global search, primary action) and a scrollable content column. On mobile the sidebar becomes a slide-in drawer with a backdrop.
+- **KPI panel** — one grouped panel: a gradient "Total couriers" hero tile plus a tile per status. Every tile shows its icon, live count and a share bar, and doubles as a quick filter.
+- **Compact clickable cards** — each courier is a small, clean one-row card showing only the essentials: personal photo, name, national ID, branch, Full/Part time and status, with a status-coloured accent edge. Clicking the card opens the **full courier profile** — no data clutter, no horizontal scrolling.
+- **Global search** in the top bar (press `/` to focus) — instant search by name, phone, national ID or plate number.
+- **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), Status — plus a **Sort** selector (newest, name A→Z/Z→A, license expiring first, status, branch). Active filters appear as removable chips above the results.
+- **CSV export** from the toolbar or the sidebar "Export report" action.
 
 ### CRUD Operations
 - **Create** — a clean modal form to add a new courier record with client + server validation.
@@ -105,12 +106,12 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
   - 🟡 **Pulsing amber badge** — "Expiring in Xd" when less than 30 days remain.
 
 ### Design & Animations
-- Animated gradient navbar, floating ambient background blobs, glassmorphism panels.
-- Staggered row entrance animations, hover lifts on cards, glowing button shadows, skeleton loading shimmer.
-- **Modern cards**: light sweep across summary + courier cards on hover, floating gradient bubbles behind the summary icons, icon tilt on hover, zoom-in effect with a centered "view" button on every uploaded document, and staggered pop-in for the 5 document slots.
-- Fully **responsive** — works great on mobile, tablet, and desktop.
+- **Sidebar + top bar app shell**, hairline-separated KPI panel, removable filter chips, and a dark → blue gradient brand system.
+- Motion: staggered KPI reveal on first paint, staggered card entrance on every filter change, hover lift + light sweep on cards, status-coloured accent edge that thickens on hover, avatar micro-zoom, sidebar item slide/glow, mobile drawer slide, animated counters, skeleton shimmer.
+- **Modern cards**: light sweep across courier cards on hover, icon tilt on the KPI tiles, zoom-in effect with a centered "view" button on every uploaded document, and staggered pop-in for the 5 document slots.
+- Fully **responsive** — mobile drawer navigation, single-column profile details on small screens, zero horizontal scrolling at any width.
 - **Bilingual typography** — Inter for Latin text and Cairo for Arabic names, so mixed Arabic/English data renders seamlessly.
-- Toast notifications, modal pop animations, Escape key to close dialogs.
+- Toast notifications, modal pop animations, Escape key to close dialogs, and `prefers-reduced-motion` support.
 
 ### Courier Model — Fields & Validation
 
