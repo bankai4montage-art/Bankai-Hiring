@@ -54,12 +54,13 @@
     ::-webkit-scrollbar-thumb:hover { background: #94A3B8; background-clip: content-box; border: 2px solid transparent; }
 
     /* Courier data cards */
-    .courier-card {
+    .compact-card {
       background: rgba(255,255,255,.86); backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,.85);
+      cursor: pointer;
       transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s;
     }
-    .courier-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(30,64,175,.12); }
+    .compact-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(30,64,175,.14); }
     .field-label { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: #94A3B8; margin-bottom: .15rem; }
     .status-select { appearance: auto; max-width: 100%; }
     .status-select:hover { filter: brightness(.97); }
@@ -167,17 +168,16 @@
       <p class="text-[11px] text-slate-400 mt-3 hidden sm:block">Tip: summary cards are quick filters — click "Active" for actives only, "Licenses Expiring" for risks, or "Total Couriers" to reset.</p>
     </section>
 
-    <!-- ============================= COURIER DATA CARDS (no horizontal scrolling) ============================= -->
-    <section id="cardsGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
-      <!-- Courier cards are rendered by JS (renderCards) -->
-    </section>
+  <!-- ============================= COURIER COMPACT CARDS (click = open profile) ============================= -->
+    <section id="cardsGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"></section>
 
     <!-- Loading skeleton -->
-    <div id="loadingState" class="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
-      <div class="skeleton h-40 rounded-2xl"></div>
-      <div class="skeleton h-40 rounded-2xl"></div>
-      <div class="skeleton h-40 rounded-2xl"></div>
-      <div class="skeleton h-40 rounded-2xl"></div>
+    <div id="loadingState" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div class="skeleton h-[76px] rounded-2xl"></div>
+      <div class="skeleton h-[76px] rounded-2xl"></div>
+      <div class="skeleton h-[76px] rounded-2xl"></div>
+      <div class="skeleton h-[76px] rounded-2xl"></div>
+      <div class="skeleton h-[76px] rounded-2xl"></div>
       <p class="col-span-full text-sm text-slate-500 text-center">Loading couriers from database…</p>
     </div>
 
@@ -197,8 +197,8 @@
     <div id="resultCount" class="text-center text-xs text-slate-500"></div>
   </main>
 
-  <!-- ============================= ADD / EDIT MODAL ============================= -->
-  <div id="modalOverlay" class="hidden fixed inset-0 z-40">
+  <!-- ============================= ADD / EDIT MODAL (above profile) ============================= -->
+  <div id="modalOverlay" class="hidden fixed inset-0 z-50">
     <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md transition-opacity" onclick="closeModal()"></div>
     <div class="absolute inset-0 overflow-y-auto p-4 sm:p-8 grid place-items-center">
       <div class="pop-in relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl shadow-brand-900/25 overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -314,7 +314,7 @@
   </div>
 
   <!-- ============================= DELETE CONFIRMATION MODAL ============================= -->
-  <div id="deleteOverlay" class="hidden fixed inset-0 z-50">
+  <div id="deleteOverlay" class="hidden fixed inset-0 z-[55]">
     <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md" onclick="closeDelete()"></div>
     <div class="absolute inset-0 grid place-items-center p-4">
       <div class="pop-in relative bg-white rounded-3xl shadow-2xl shadow-brand-900/25 max-w-sm w-full p-6 text-center" role="dialog" aria-modal="true">
@@ -335,8 +335,18 @@
     </div>
   </div>
 
+  <!-- ============================= COURIER PROFILE (full details + documents) ============================= -->
+  <div id="profileOverlay" class="hidden fixed inset-0 z-40">
+    <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md" onclick="closeProfile()"></div>
+    <div class="absolute inset-0 overflow-y-auto p-4 sm:p-8 grid place-items-center">
+      <div id="profilePanel" class="pop-in relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl shadow-brand-900/25 overflow-hidden" role="dialog" aria-modal="true" aria-label="Courier profile">
+        <!-- Rendered by renderProfile() -->
+      </div>
+    </div>
+  </div>
+
   <!-- ============================= TOASTS ============================= -->
-  <div id="toastStack" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[calc(100%-2rem)] max-w-xs"></div>
+  <div id="toastStack" class="fixed bottom-4 right-4 z-[70] space-y-2 w-[calc(100%-2rem)] max-w-xs"></div>
 
   <!-- Shared input styling injected once -->
   <style>
@@ -542,12 +552,9 @@
       return sorted;
     }
 
-    /* ------------------------- Courier data cards ------------------------- */
+    /* ------------------------- Courier compact cards ------------------------- */
 
-    /** One compact field cell, always readable — no horizontal scroll anywhere. */
-    const field = (label, content) =>
-      `<div class="min-w-0"><p class="field-label">${label}</p>${content}</div>`;
-
+    /** License date line + expiry warning badge (used in cards & profiles). */
     const licenseCell = (r) => {
       let badge = '';
       if (isExpired(r)) {
@@ -563,55 +570,38 @@
       const nameFont = s => isArabic(s) ? 'font-arabic' : '';
 
       qs('#cardsGrid').innerHTML = list.map((r, i) => `
-        <article class="courier-card rounded-2xl shadow-card row-anim" style="animation-delay:${Math.min(i * 40, 400)}ms">
-          <!-- Card header: identity + actions -->
-          <div class="flex items-start gap-3 p-4">
-            <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white grid place-items-center text-sm font-bold shrink-0 shadow-sm">
-              ${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}
-            </div>
+        <article onclick="openProfile('${r.id}')" title="Open ${escAttr(r.fullName)} profile"
+          class="compact-card rounded-2xl shadow-card row-anim overflow-hidden" style="animation-delay:${Math.min(i * 35, 400)}ms">
+          <div class="flex items-center gap-3 p-2.5 sm:p-3">
+            <!-- Personal photo (or initials) -->
+            ${r.photo
+              ? `<img src="/api/documents/${r.photo}" alt="" loading="lazy" class="w-11 h-11 rounded-xl object-cover shrink-0 ring-2 ring-brand-100" />`
+              : `<div class="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white grid place-items-center text-sm font-bold shrink-0 shadow-sm">${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}</div>`}
+            <!-- Name + national ID + tiny chips -->
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-bold text-ink truncate ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</h3>
-                <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ring-1 ${STATUS_META[r.status]?.badge ?? ''}" dir="ltr">
+                <h3 class="font-bold text-sm text-ink truncate ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</h3>
+                <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ${STATUS_META[r.status]?.badge ?? ''}" dir="ltr">
                   <span class="w-1.5 h-1.5 rounded-full ${STATUS_META[r.status]?.dot ?? 'bg-slate-400'}"></span>${esc(r.status)}
                 </span>
               </div>
-              <p class="text-[11px] text-slate-400 num mt-0.5" dir="ltr">${esc(r.phone)} · ${esc(r.nationalId)}</p>
+              <p class="num text-[11px] text-slate-400 mt-0.5" dir="ltr">${esc(r.nationalId)}</p>
+              <div class="flex items-center gap-1.5 mt-1.5">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-600 ring-1 ring-blue-600/10">QCD<span class="num">${esc(r.branch.slice(-1))}</span></span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ring-1 ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>
+              </div>
             </div>
-            <!-- Actions -->
-            <div class="inline-flex items-center gap-0.5 shrink-0">
+            <!-- Quick actions (don't trigger the profile click) -->
+            <div class="flex items-center gap-0.5 shrink-0" onclick="event.stopPropagation()">
               <button type="button" onclick='openModal("${r.id}")' title="Edit"
-                class="p-2 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 active:scale-90 transition-all">
+                class="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 active:scale-90 transition-all">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
               </button>
-              <button type="button" onclick="openCopy('${r.id}')" title="Duplicate"
-                class="p-2 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 active:scale-90 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8 8V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3m-11 0V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1Z"/></svg>
-              </button>
               <button type="button" onclick="askDelete('${r.id}')" title="Delete"
-                class="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 active:scale-90 transition-all">
+                class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 active:scale-90 transition-all">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
               </button>
             </div>
-          </div>
-
-          <!-- Card body: EVERY field visible, wrapped — no horizontal scrolling -->
-          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-3 px-4 pb-4 pt-3 border-t border-slate-100/80">
-            ${field('Phone', `<a href="tel:${escAttr(r.phone)}" class="num text-xs font-semibold text-slate-700 hover:text-brand-600 transition-colors" dir="ltr">${esc(r.phone)}</a>`)}
-            ${field('National ID', `<span class="num text-xs font-semibold text-slate-700" dir="ltr">${esc(r.nationalId)}</span>`)}
-            ${field('Branch', `<span class="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-lg bg-brand-50 text-brand-600 ring-1 ring-blue-600/10">QCD<span class="num">${esc(r.branch.slice(-1))}</span></span>`)}
-            ${field('Type', `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ring-1 w-fit ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>`)}
-            ${field('P. License', licenseCell(r))}
-            ${field('Plate No.', `<span class="num text-xs font-semibold text-slate-700" dir="ltr">${esc(r.plate) || '—'}</span>`)}
-            ${field('Outlook', r.outlook
-              ? `<a href="mailto:${escAttr(r.outlook)}" class="text-xs text-slate-600 hover:text-brand-600 truncate block transition-colors" dir="ltr" title="${escAttr(r.outlook)}">${esc(r.outlook)}</a>`
-              : '<span class="text-slate-300 text-xs">—</span>')}
-            ${field('Change Status', `
-              <select name="status-select-${escAttr(r.id)}" onchange="quickStatus('${r.id}', this.value)"
-                class="status-select w-full text-[11px] font-bold py-1.5 px-2 rounded-lg border-0 cursor-pointer ring-1 focus:ring-2 focus:ring-brand-500/50 focus:outline-none truncate ${STATUS_META[r.status]?.badge ?? ''}"
-                title="${escAttr(r.status)} — change status">
-                ${STATUSES.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
-              </select>`)}
           </div>
         </article>
       `).join('');
@@ -620,6 +610,195 @@
       const sortMode = qs('#sortBy').selectedOptions[0].textContent.replace('Sort: ', '');
       qs('#resultCount').textContent = `Showing ${list.length} of ${state.length} courier record${state.length === 1 ? '' : 's'}${cardFilter.expiring ? ' · expiring licenses only' : ''}${sortMode !== 'Newest first' ? ` · sorted by ${sortMode.toLowerCase()}` : ''}`;
       qs('#navCount').textContent = `${state.length} records`;
+    }
+
+    /* ------------------------- Courier profile (full details + documents) ------------------------- */
+
+    const DOC_KINDS = [
+      { kind: 'photo',          label: 'Personal Photo',    ico: 'M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM5 20a7 7 0 0 1 14 0' },
+      { kind: 'id_front',       label: 'ID Card — Front',   ico: 'M2.5 6.5A1.5 1.5 0 0 1 4 5h16a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5v-11ZM7 9.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM5 16c.6-1.2 1.6-2 3-2s2.4.8 3 2m4-6h4m-4 3h4' },
+      { kind: 'id_back',        label: 'ID Card — Back',    ico: 'M2.5 6.5A1.5 1.5 0 0 1 4 5h16a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5v-11ZM6 9h6m-6 3h9m-9 3h5' },
+      { kind: 'license_front',  label: 'License — Front',   ico: 'M8 3h8l6 6v12l-3-2-3 2-3-2-3 2-3-2-3 2V9l6-6Zm0 6h8M8 13h8m-8 4h5' },
+      { kind: 'license_back',   label: 'License — Back',    ico: 'M8 3h8l6 6v12l-3-2-3 2-3-2-3 2-3-2-3 2V9l6-6Zm2 6h6m-6 4h9m-9 3h6' }
+    ];
+    let profileCourier = null; // courier + documents currently open in the profile
+
+    async function openProfile(id) {
+      try {
+        profileCourier = await api(`/couriers/${id}`); // courier + documents metadata
+        qs('#profilePanel').innerHTML = profileMarkup(profileCourier);
+        qs('#profileOverlay').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      } catch (err) {
+        toast(err.message || 'Could not load the profile.', 'error');
+      }
+    }
+
+    async function refreshProfile() {
+      if (!profileCourier) return;
+      try {
+        profileCourier = await api(`/couriers/${profileCourier.id}`);
+        qs('#profilePanel').innerHTML = profileMarkup(profileCourier);
+      } catch { /* profile will refresh on next open */ }
+    }
+
+    function closeProfile() {
+      qs('#profileOverlay').classList.add('hidden');
+      document.body.style.overflow = qs('#modalOverlay') && !qs('#modalOverlay').classList.contains('hidden') ? 'hidden' : '';
+      profileCourier = null;
+    }
+
+    /** Big avatar for the profile header (photo or initials). */
+    const profileAvatar = (c, classes) => c.photo
+      ? `<img src="/api/documents/${c.photo}" alt="" class="${classes} object-cover" loading="lazy" />`
+      : `<div class="${classes} bg-white/20 text-white grid place-items-center font-bold ring-1 ring-white/30">${esc((c.fullName.trim().charAt(0) || '?').toUpperCase())}</div>`;
+
+    function profileMarkup(c) {
+      const nameFont = isArabic(c.fullName) ? 'font-arabic' : '';
+      const info = [
+        ['Phone', `<a href="tel:${escAttr(c.phone)}" class="num text-sm font-semibold text-slate-700 hover:text-brand-600 transition-colors" dir="ltr">${esc(c.phone)}</a>`],
+        ['National ID', `<span class="num text-sm font-semibold text-slate-700" dir="ltr">${esc(c.nationalId)}</span>`],
+        ['Branch', `<span class="inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-lg bg-brand-50 text-brand-600 ring-1 ring-blue-600/10">QCD<span class="num">${esc(c.branch.slice(-1))}</span></span>`],
+        ['Employment Type', `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ring-1 ${c.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(c.employmentType)}</span>`],
+        ['Outlook', c.outlook
+          ? `<a href="mailto:${escAttr(c.outlook)}" class="text-sm text-slate-600 hover:text-brand-600 transition-colors" dir="ltr">${esc(c.outlook)}</a>`
+          : '<span class="text-sm text-slate-300">—</span>'],
+        ['Plate No.', `<span class="num text-sm font-semibold text-slate-700" dir="ltr">${esc(c.plate) || '—'}</span>`],
+        ['P. License', licenseCell(c)],
+        ['Record', `<span class="text-xs text-slate-400" dir="ltr">Updated ${fmtDate(String(c.updatedAt || '').slice(0, 10))}</span>`]
+      ];
+
+      const slots = DOC_KINDS.map(k => {
+        const doc = (c.documents || []).find(d => d.kind === k.kind) || null;
+        return `
+        <div class="rounded-2xl border-2 border-dashed ${doc ? 'border-brand-200 bg-brand-50/40' : 'border-slate-200 bg-surface/60'} p-3 flex flex-col items-center text-center transition-colors">
+          <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2 w-full truncate">${k.label}</p>
+          <div class="w-full aspect-[4/3] rounded-xl overflow-hidden bg-white grid place-items-center ring-1 ring-slate-200/80 mb-2">
+            ${doc
+              ? `<img src="/api/documents/${doc.id}" class="w-full h-full object-cover cursor-zoom-in hover:opacity-90 transition" loading="lazy" onclick="window.open('/api/documents/${doc.id}','_blank')" alt="${escAttr(k.label)}" />`
+              : `<div class="grid place-items-center text-slate-300">
+                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="${k.ico}"/></svg>
+                 </div>`}
+          </div>
+          <div class="flex items-center justify-center gap-1.5 w-full">
+            ${doc ? `
+              <a href="/api/documents/${doc.id}" target="_blank" title="View full size"
+                class="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+              </a>
+              <a href="/api/documents/${doc.id}?download=1" title="Download"
+                class="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+              </a>
+              <button type="button" onclick="askDeleteDoc('${doc.id}')" title="Delete"
+                class="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
+              </button>` : ''}
+            <button type="button" onclick="qs('#doc-file-${k.kind}').click()"
+              class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg ${doc ? 'text-brand-600 bg-white ring-1 ring-brand-200 hover:bg-brand-50' : 'text-white bg-gradient-to-r from-brand-500 to-brand-600 hover:shadow-glow'} transition-all active:scale-95">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20V8m0 0-4 4m4-4 4 4M4 4h16"/></svg>
+              ${doc ? 'Replace' : 'Upload'}
+            </button>
+          </div>
+          <input type="file" id="doc-file-${k.kind}" accept="image/jpeg,image/png,image/webp" class="hidden"
+            onchange="uploadDoc('${k.kind}', this)" />
+        </div>`;
+      }).join('');
+
+      return `
+        <!-- Profile header -->
+        <div class="nav-gradient px-6 py-5 flex items-center gap-4">
+          ${profileAvatar(c, 'w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shrink-0 ring-2 ring-white/40')}
+          <div class="min-w-0 flex-1">
+            <h2 class="text-white font-extrabold text-lg sm:text-xl truncate ${nameFont}">${esc(c.fullName)}</h2>
+            <p class="text-blue-100/90 text-xs num mt-0.5" dir="ltr">${esc(c.phone)} · ${esc(c.nationalId)}</p>
+            <div class="flex items-center gap-2 mt-2 flex-wrap">
+              <span id="profileStatusChip" class="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ring-1 bg-white/15 text-white ring-white/30" dir="ltr" data-status="${escAttr(c.status)}">
+                <span class="w-1.5 h-1.5 rounded-full bg-white"></span>${esc(c.status)}
+              </span>
+              <select id="profileStatusSelect" onchange="quickStatus('${c.id}', this.value)" title="Change status"
+                class="text-[11px] font-bold py-1 px-2 rounded-lg border-0 bg-white/15 text-white cursor-pointer ring-1 ring-white/30 focus:outline-none [&>option]:text-slate-800">
+                ${STATUSES.map(s => `<option value="${s}" ${s === c.status ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="flex flex-col gap-2 shrink-0">
+            <button type="button" onclick="openModal('${c.id}')"
+              class="inline-flex items-center gap-1.5 bg-white text-brand-600 text-xs font-bold px-3 py-2 rounded-xl hover:bg-blue-50 active:scale-95 transition-all shadow">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
+              Edit
+            </button>
+            <button type="button" onclick="closeProfile()" class="text-blue-100 hover:text-white p-1.5 rounded-lg hover:bg-white/10 self-end transition">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="w-5 h-5"><path stroke-linecap="round" d="M6 18 18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- Details -->
+        <div class="px-6 py-5 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-4">
+          ${info.map(([label, content]) => `
+            <div class="min-w-0"><p class="field-label">${label}</p>${content}</div>`).join('')}
+        </div>
+        <!-- Documents -->
+        <div class="px-6 pb-6 pt-4 border-t border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-extrabold text-ink flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-brand-500"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>
+              Documents
+            </h3>
+            <p class="text-[10px] text-slate-400">JPG · PNG · WEBP — max 5MB each</p>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">${slots}</div>
+        </div>`;
+    }
+
+    /** Upload (or replace) an image into a document slot. */
+    async function uploadDoc(kind, inputEl) {
+      const file = inputEl.files?.[0];
+      inputEl.value = ''; // allow re-picking the same file
+      if (!file || !profileCourier) return;
+      try {
+        const fd = new FormData();
+        fd.append('kind', kind);
+        fd.append('file', file);
+        const res = await fetch(`/api/couriers/${profileCourier.id}/documents`, { method: 'POST', body: fd });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw { message: body.error || `Upload failed (${res.status})` };
+        toast(kind === 'photo' ? 'Personal photo uploaded.' : 'Document uploaded.', 'success');
+        await refreshProfile(); // re-render profile with the new image
+        state = state.map(r => r.id === profileCourier.id ? { ...r, photo: kind === 'photo' ? body.id : r.photo } : r);
+        rerender(); // cards instantly show the new personal photo
+      } catch (err) {
+        toast(err.message || 'Upload failed.', 'error');
+      }
+    }
+
+    /* Delete doc ask/confirm (reuses the delete modal pattern) */
+    let deleteDocTarget = null;
+    function askDeleteDoc(docId) {
+      deleteDocTarget = docId;
+      qs('#deleteMsg').textContent = 'This image will be permanently removed from the database.';
+      const overlay = qs('#deleteOverlay');
+      overlay.querySelector('h3').textContent = 'Delete document?';
+      overlay.classList.remove('hidden');
+    }
+
+    async function doDeleteDoc() {
+      const id = deleteDocTarget;
+      deleteDocTarget = null;
+      qs('#deleteOverlay').classList.add('hidden');
+      qs('#deleteOverlay').querySelector('h3').textContent = 'Delete courier record?';
+      try {
+        await api(`/documents/${id}`, { method: 'DELETE' });
+        const kind = (profileCourier?.documents || []).find(d => d.id === id)?.kind;
+        if (kind === 'photo') {
+          state = state.map(r => r.id === profileCourier.id ? { ...r, photo: null } : r);
+          rerender();
+        }
+        await refreshProfile();
+        toast('Document deleted.', 'success');
+      } catch (err) {
+        toast(err.message || 'Delete failed.', 'error');
+      }
     }
 
     const rerender = () => { renderSummary(); renderCards(); };
@@ -726,6 +905,7 @@
       document.body.style.overflow = '';
     }
 
+    /* Quick status change — updates state, cards and an open profile. */
     async function quickStatus(id, status) {
       try {
         const updated = await api(`/couriers/${id}/status`, {
@@ -735,10 +915,12 @@
         const idx = state.findIndex(r => r.id === id);
         if (idx !== -1) state[idx] = updated;
         rerender();
+        if (profileCourier && profileCourier.id === id) await refreshProfile();
         toast(`Status updated to "${status}"`, 'success');
       } catch (err) {
         toast(err.message, 'error');
         rerender(); // restore previous selection
+        if (profileCourier && profileCourier.id === id) await refreshProfile();
       }
     }
 
@@ -749,15 +931,23 @@
       qs('#deleteOverlay').classList.remove('hidden');
     }
 
-    const closeDelete = () => { deleteTargetId = null; qs('#deleteOverlay').classList.add('hidden'); };
+    const closeDelete = () => {
+      deleteTargetId = null;
+      deleteDocTarget = null;
+      qs('#deleteOverlay').classList.add('hidden');
+      qs('#deleteOverlay').querySelector('h3').textContent = 'Delete courier record?';
+    };
 
     async function confirmDelete() {
+      if (deleteDocTarget) return doDeleteDoc(); // document flow reuses the same dialog
       if (!deleteTargetId) return closeDelete();
       const id = deleteTargetId;
       closeDelete();
       try {
         await api(`/couriers/${id}`, { method: 'DELETE' });
         state = state.filter(r => r.id !== id);
+        const wasOpen = profileCourier && profileCourier.id === id;
+        if (wasOpen) closeProfile();
         rerender();
         toast('Courier record deleted.', 'success');
       } catch (err) {
@@ -799,6 +989,7 @@
           const idx = state.findIndex(r => r.id === id);
           if (idx !== -1) state[idx] = updated;
           toast('Courier record updated.', 'success');
+          if (profileCourier && profileCourier.id === id) await refreshProfile(); // keep an open profile in sync
         } else {
           const created = await api('/couriers', { method: 'POST', body: JSON.stringify(payload) });
           state.unshift(created);
@@ -881,6 +1072,7 @@
       if (e.key !== 'Escape') return;
       if (!qs('#deleteOverlay').classList.contains('hidden')) closeDelete();
       else if (!qs('#modalOverlay').classList.contains('hidden')) closeModal();
+      else if (!qs('#profileOverlay').classList.contains('hidden')) closeProfile();
     });
 
     /* ------------------------- Boot ------------------------- */

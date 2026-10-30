@@ -3,15 +3,29 @@
  * REST endpoints consumed by the frontend dashboard in /public.
  */
 import express from 'express';
+import multer from 'multer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db, seedIfEmpty, listCouriers } from './db.js';
+import { db, docs, seedIfEmpty, listCouriers } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+/* Courier images (max 5MB, images only) kept in-memory then persisted as blobs */
+const KINDS = ['photo', 'id_front', 'id_back', 'license_front', 'license_back'];
+const KIND_LABELS = {
+  photo: 'personal-photo', id_front: 'id-card-front', id_back: 'id-card-back',
+  license_front: 'license-front', license_back: 'license-back'
+};
+const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, !!MIME_EXT[file.mimetype])
+});
 
 /* ------------------------- Static frontend ------------------------- */
 app.use(express.static(path.join(__dirname, 'public')));
@@ -24,6 +38,67 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'bankai-hiri
 // Read: all couriers
 app.get('/api/couriers', (_req, res) => {
   res.json(listCouriers());
+});
+
+// Read: one courier + its documents metadata (profile view)
+app.get('/api/couriers/:id', (req, res) => {
+  const courier = db.get(req.params.id);
+  if (!courier) return res.status(404).json({ error: 'Courier not found.' });
+  res.json({ ...courier, documents: docs.list(courier.id) });
+});
+
+/* ------------------------- Documents: upload / view / download / delete ------------------------- */
+
+// Upload an image (kind: photo | id_front | id_back | license_front | license_back)
+app.post('/api/couriers/:id/documents', upload.single('file'), (req, res) => {
+  const courier = db.get(req.params.id);
+  if (!courier) return res.status(404).json({ error: 'Courier not found.' });
+
+  const kind = String(req.body.kind || '');
+  if (!KINDS.includes(kind)) return res.status(400).json({ error: 'Invalid document kind.' });
+  if (!req.file) return res.status(400).json({ error: 'No image file received (jpg/png/webp, max 5MB).' });
+
+  // Personal photo is unique: replace any previous photo document
+  if (kind === 'photo') {
+    docs.list(courier.id).filter(d => d.kind === 'photo').forEach(d => docs.remove(d.id));
+  }
+
+  const doc = docs.add({
+    courierId: courier.id,
+    kind,
+    mime: req.file.mimetype,
+    size: req.file.size,
+    data: req.file.buffer
+  });
+  res.status(201).json(doc);
+});
+
+// View (inline) or download (?download=1) a stored image
+app.get('/api/documents/:id', (req, res) => {
+  const doc = docs.get(req.params.id);
+  if (!doc) return res.status(404).json({ error: 'Document not found.' });
+
+  const courier = db.get(doc.courier_id);
+  const name = courier ? courier.fullName.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() : 'courier';
+  const ext = MIME_EXT[doc.mime] || 'jpg';
+  const filename = `bankai-${name}-${KIND_LABELS[doc.kind]}.${ext}`.replace(/\s+/g, '_');
+
+  res.setHeader('Content-Type', doc.mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  if (req.query.download) {
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  } else {
+    res.setHeader('Content-Disposition', `inline`);
+  }
+  res.send(doc.data);
+});
+
+// Delete a stored image
+app.delete('/api/documents/:id', (req, res) => {
+  const doc = docs.get(req.params.id);
+  if (!doc) return res.status(404).json({ error: 'Document not found.' });
+  docs.remove(doc.id);
+  res.json({ ok: true });
 });
 
 // Server-side validation (mirrors the client-side rules)

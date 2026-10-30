@@ -12,14 +12,14 @@ A modern, responsive full-stack web application for managing **courier hiring** 
 ```
 Bankai-Hiring/
 ├── public/
-│   ├── index.html          # Dashboard UI (cards layout, talks to the REST API)
+│   ├── index.html          # Dashboard UI (compact cards + courier profiles)
 │   └── assets/
 │       ├── styles.css      # Compiled Tailwind CSS (self-hosted, no CDN)
 │       ├── tailwind.src.css# Build input for the CSS
 │       ├── fonts.css       # Self-hosted font-face rules
 │       └── fonts/          # Inter + Cairo woff2 files
-├── server.js               # Express server: static frontend + REST endpoints
-├── db.js                   # SQLite layer (schema, queries, 5-record seed on first boot)
+├── server.js               # Express server: static frontend + REST endpoints + document uploads
+├── db.js                   # SQLite layer (couriers + documents, 5-record seed on first boot)
 ├── build.js                # npm run build:css → compiles public/assets/styles.css
 ├── fetch-fonts.js          # npm run fetch:fonts → downloads self-hosted fonts (one-time)
 ├── package.json            # Dependencies & scripts
@@ -58,16 +58,21 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/health` | Health check |
-| GET | `/api/couriers` | List all couriers |
+| GET | `/api/couriers` | List all couriers (including personal-photo IDs) |
+| GET | `/api/couriers/:id` | One courier + documents metadata (profile) |
 | POST | `/api/couriers` | Create (full validation, 400 + field errors on failure) |
 | PUT | `/api/couriers/:id` | Update a full record |
 | PATCH | `/api/couriers/:id/status` | Quick status change |
-| DELETE | `/api/couriers/:id` | Delete a record |
+| DELETE | `/api/couriers/:id` | Delete a record (its documents cascade) |
+| POST | `/api/couriers/:id/documents` | Upload image (kind: photo / id_front / id_back / license_front / license_back) |
+| GET | `/api/documents/:id` | View image inline |
+| GET | `/api/documents/:id?download=1` | Download image as file |
+| DELETE | `/api/documents/:id` | Delete an image |
 
 ## ✨ Features
 
 ### Dashboard & Data
-- **Fully responsive data cards** — every courier's complete record (phone, national ID, branch, license dates, plate, outlook, status) is visible in a compact card at any screen size, with **no horizontal scrolling ever**.
+- **Compact clickable cards** — each courier is a small, clean one-row card showing only the essentials: personal photo, name, national ID, branch, Full/Part time and status. Clicking the card opens the **full courier profile** — no data clutter, no horizontal scrolling.
 - **Top navigation bar** with the project title, live record counter, and a "Live Database" indicator.
 - **Quick summary cards**: Total Couriers, Active, OnBoarding, OffBoarding, Attended to D0, Not Attended to D0, Licenses Expiring.
 - **Search bar**: search instantly by Name, Phone, National ID, or Plate Number.
@@ -83,9 +88,15 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - **Persistence** — records are stored in a **SQLite database**; changes are durable across refreshes, devices, and redeploys.
 
 ### Extra Features
-- **Column sorting** — via the "Sort" selector in the toolbar (name, license expiry, status, branch).
+- **Courier profiles** — clicking a card opens a full profile with every field, an inline status chip + quick status selector, and an Edit shortcut.
+- **Photo & document uploads** — every profile has 5 upload slots:
+  - 🧑 **Personal photo** — shown on the compact card avatar too (upload once, visible everywhere).
+  - 🪪 **ID card** — front & back.
+  - 📜 **Personal license** — front & back.
+  Images are stored directly in SQLite (max 5MB, JPG/PNG/WEBP) and survive redeploys on the Railway Volume.
+- **View & download** — every uploaded image can be opened full-size or downloaded with a friendly filename (e.g. `bankai_Ahmed_Mohamed_id-card-front.png`). The personal photo is unique per courier — re-uploading replaces it.
 - **CSV export** — exports exactly what you currently see (with filters + sorting), UTF-8 BOM so Arabic renders correctly in Excel.
-- **Duplicate record** — a copy button on each row opens the add form prefilled from an existing record (edit the National ID, then save).
+- **Duplicate record** — from the profile/edit modals a copy button opens the add form prefilled (edit the National ID, then save).
 - **Clickable summary cards** — cards double as quick filters (click "Active" to show actives only, "Licenses Expiring" to show licenses in danger, click "Total Couriers" to reset).
 - **Animated counters** — summary numbers ease from their previous value to the new one after every change.
 - **License expiry warnings**:

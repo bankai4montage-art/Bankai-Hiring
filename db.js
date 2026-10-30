@@ -15,6 +15,7 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const sqlite = new Database(DB_PATH);
 sqlite.pragma('journal_mode = WAL');
+sqlite.pragma('foreign_keys = ON'); // deleting a courier cascades to its documents
 
 /* ------------------------- Schema ------------------------- */
 sqlite.exec(`
@@ -33,6 +34,17 @@ sqlite.exec(`
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS documents (
+    id          TEXT PRIMARY KEY,
+    courier_id  TEXT NOT NULL REFERENCES couriers(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL CHECK (kind IN ('photo', 'id_front', 'id_back', 'license_front', 'license_back')),
+    mime        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    data        BLOB NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_documents_courier ON documents(courier_id);
 `);
 
 const now = () => new Date().toISOString();
@@ -52,6 +64,7 @@ const ROW = {
       outlook: row.outlook,
       plate: row.plate,
       status: row.status,
+      photo: row.photo_doc || null, // personal-photo document id (list query only)
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -69,11 +82,14 @@ const ROW = {
 };
 
 const SELECT = 'SELECT * FROM couriers';
+const SELECT_WITH_PHOTO = `SELECT c.*,
+  (SELECT d.id FROM documents d WHERE d.courier_id = c.id AND d.kind = 'photo' LIMIT 1) AS photo_doc
+  FROM couriers c`;
 
 export const db = {
-  /** All couriers, newest first. */
+  /** All couriers (with the personal-photo document id, if any), newest first. */
   list() {
-    return sqlite.prepare(`${SELECT} ORDER BY created_at DESC, id`).all().map(ROW.fromServer);
+    return sqlite.prepare(`${SELECT_WITH_PHOTO} ORDER BY created_at DESC, id`).all().map(ROW.fromServer);
   },
 
   /** One courier by id (or null). */
@@ -81,7 +97,6 @@ export const db = {
     const row = sqlite.prepare(`${SELECT} WHERE id = ?`).get(id);
     return row ? ROW.fromServer(row) : null;
   },
-
   /** Create a courier from a validated payload. */
   create(d) {
     const r = ROW.fromClient(d);
@@ -126,6 +141,35 @@ export const db = {
 
 /** Back-compat alias used by server.js for GET /api/couriers */
 export const listCouriers = db.list;
+
+/* ------------------------- Documents (courier images) ------------------------- */
+const DOC_META = 'SELECT id, courier_id, kind, mime, size, created_at FROM documents';
+
+export const docs = {
+  /** Metadata of all documents of one courier. */
+  list(courierId) {
+    return sqlite.prepare(`${DOC_META} WHERE courier_id = ? ORDER BY created_at`).all(courierId)
+      .map(r => ({ id: r.id, courierId: r.courier_id, kind: r.kind, mime: r.mime, size: r.size, createdAt: r.created_at }));
+  },
+
+  /** Store an image blob; returns its metadata. kind: photo | id_front | id_back | license_front | license_back */
+  add({ courierId, kind, mime, size, data }) {
+    const id = crypto.randomUUID();
+    sqlite.prepare(`INSERT INTO documents (id, courier_id, kind, mime, size, data) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(id, courierId, kind, mime, size, data);
+    return { id, courierId, kind, mime, size, createdAt: new Date().toISOString() };
+  },
+
+  /** Full document row including the binary data (or null). */
+  get(id) {
+    return sqlite.prepare('SELECT * FROM documents WHERE id = ?').get(id) || null;
+  },
+
+  /** Delete a document; returns true when a row was removed. */
+  remove(id) {
+    return sqlite.prepare('DELETE FROM documents WHERE id = ?').run(id).changes > 0;
+  }
+};
 
 /* ------------------------- Seed data (first boot only) ------------------------- */
 export function seedIfEmpty() {
