@@ -12,14 +12,23 @@ A modern, responsive full-stack web application for managing **courier hiring** 
 ```
 Bankai-Hiring/
 ├── public/
-│   └── index.html   # Dashboard UI (Tailwind + Vanilla JS, talks to the REST API)
-├── server.js        # Express server: static frontend + REST endpoints
-├── db.js            # SQLite layer (schema, queries, 4-record seed on first boot)
-├── package.json     # Dependencies & start script
-├── railway.json     # Railway build/deploy config (NIXPACKS + npm start)
+│   ├── index.html          # Dashboard UI (cards layout, talks to the REST API)
+│   └── assets/
+│       ├── styles.css      # Compiled Tailwind CSS (self-hosted, no CDN)
+│       ├── tailwind.src.css# Build input for the CSS
+│       ├── fonts.css       # Self-hosted font-face rules
+│       └── fonts/          # Inter + Cairo woff2 files
+├── server.js               # Express server: static frontend + REST endpoints
+├── db.js                   # SQLite layer (schema, queries, 5-record seed on first boot)
+├── build.js                # npm run build:css → compiles public/assets/styles.css
+├── fetch-fonts.js          # npm run fetch:fonts → downloads self-hosted fonts (one-time)
+├── package.json            # Dependencies & scripts
+├── railway.json            # Railway build/deploy config (NIXPACKS + npm start)
 ├── README.md
-└── LICENSE          # MIT
+└── LICENSE                 # MIT
 ```
+
+**Zero external dependencies at runtime** — Tailwind is pre-compiled to a local CSS file and fonts (Inter + Cairo) are self-hosted, so the app works fully offline / on isolated networks.
 
 ## 🚀 How to Run
 
@@ -32,6 +41,8 @@ npm start
 ```
 
 The database file is created at `data/bankai-hiring.db` (set `DATABASE_PATH` to override). On first boot the server seeds 5 realistic demo records.
+
+To regenerate the compiled CSS after changing markup/classes: `npm run build:css`.
 
 ### Railway (production)
 
@@ -56,11 +67,11 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 ## ✨ Features
 
 ### Dashboard & Data
+- **Fully responsive data cards** — every courier's complete record (phone, national ID, branch, license dates, plate, outlook, status) is visible in a compact card at any screen size, with **no horizontal scrolling ever**.
 - **Top navigation bar** with the project title, live record counter, and a "Live Database" indicator.
 - **Quick summary cards**: Total Couriers, Active, OnBoarding, OffBoarding, Attended to D0, Not Attended to D0, Licenses Expiring.
-- **Structured data table** with a responsive layout (columns gracefully collapse on smaller screens).
 - **Search bar**: search instantly by Name, Phone, National ID, or Plate Number.
-- **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), and Status.
+- **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), Status — plus a **Sort** selector (newest, name A→Z/Z→A, license expiring first, status, branch).
 
 ### CRUD Operations
 - **Create** — a clean modal form to add a new courier record with client + server validation.
@@ -72,7 +83,7 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - **Persistence** — records are stored in a **SQLite database**; changes are durable across refreshes, devices, and redeploys.
 
 ### Extra Features
-- **Column sorting** — click any column header (Courier, Phone, National ID, Branch, Type, License, Status) to sort ascending/descending.
+- **Column sorting** — via the "Sort" selector in the toolbar (name, license expiry, status, branch).
 - **CSV export** — exports exactly what you currently see (with filters + sorting), UTF-8 BOM so Arabic renders correctly in Excel.
 - **Duplicate record** — a copy button on each row opens the add form prefilled from an existing record (edit the National ID, then save).
 - **Clickable summary cards** — cards double as quick filters (click "Active" to show actives only, "Licenses Expiring" to show licenses in danger, click "Total Couriers" to reset).
@@ -127,10 +138,10 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 
 | Layer | Choice |
 |---|---|
-| Frontend | HTML5 + Tailwind CSS (CDN) + Vanilla JavaScript (ES6+, modular & commented) |
+| Frontend | HTML5 + self-hosted compiled Tailwind CSS + Vanilla JavaScript (no external CDNs) |
 | Backend | Node.js + Express (REST API) |
 | Database | SQLite via better-sqlite3 (WAL mode, schema-enforced) |
-| Fonts | Inter + Cairo (Google Fonts) |
+| Fonts | Inter + Cairo (self-hosted woff2, no Google CDN) |
 | Hosting | Railway (NIXPACKS build, `/data` volume) |
 
 ## 🧪 Reset the Demo Data (local)
