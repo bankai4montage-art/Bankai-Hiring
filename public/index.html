@@ -913,9 +913,9 @@
               : `<div class="avatar w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white grid place-items-center text-sm font-bold shrink-0 shadow-sm">${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}</div>`}
             <!-- Identity -->
             <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 min-w-0">
-                <h3 class="font-bold text-[13.5px] text-ink truncate ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</h3>
-                <span class="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ring-1 shrink-0 ${STATUS_META[r.status]?.badge ?? ''}" dir="ltr">
+              <div class="flex items-start gap-2 min-w-0">
+                <h3 class="font-bold text-[13.5px] text-ink leading-tight line-clamp-2 min-w-0 ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</h3>
+                <span class="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ring-1 shrink-0 mt-0.5 ${STATUS_META[r.status]?.badge ?? ''}" dir="ltr">
                   <span class="w-1.5 h-1.5 rounded-full ${STATUS_META[r.status]?.dot ?? 'bg-slate-400'}"></span>${esc(r.status)}
                 </span>
               </div>
