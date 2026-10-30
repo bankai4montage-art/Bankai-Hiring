@@ -44,7 +44,12 @@ app.get('/api/couriers', (_req, res) => {
 app.get('/api/couriers/:id', (req, res) => {
   const courier = db.get(req.params.id);
   if (!courier) return res.status(404).json({ error: 'Courier not found.' });
-  res.json({ ...courier, documents: docs.list(courier.id) });
+  const documents = docs.list(courier.id);
+  res.json({
+    ...courier,
+    photo: documents.find(d => d.kind === 'photo')?.id || null, // so the header avatar renders
+    documents
+  });
 });
 
 /* ------------------------- Documents: upload / view / download / delete ------------------------- */

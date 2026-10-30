@@ -74,13 +74,13 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 ### Dashboard & Data
 - **Compact clickable cards** — each courier is a small, clean one-row card showing only the essentials: personal photo, name, national ID, branch, Full/Part time and status. Clicking the card opens the **full courier profile** — no data clutter, no horizontal scrolling.
 - **Top navigation bar** with the project title, live record counter, and a "Live Database" indicator.
-- **Quick summary cards**: Total Couriers, Active, OnBoarding, OffBoarding, Attended to D0, Not Attended to D0, Licenses Expiring.
+- **Quick summary cards**: Total Couriers, Active, OnBoarding, OffBoarding, Attended to D0, Not Attended to D0.
 - **Search bar**: search instantly by Name, Phone, National ID, or Plate Number.
 - **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), Status — plus a **Sort** selector (newest, name A→Z/Z→A, license expiring first, status, branch).
 
 ### CRUD Operations
 - **Create** — a clean modal form to add a new courier record with client + server validation.
-- **Read** — table view with live search and filters, data loaded from the REST API.
+- **Read** — card view with live search and filters, data loaded from the REST API.
 - **Update**:
   - Edit any record via the same modal form (prefilled).
   - **Quick status change** directly from the table row (dropdown) for `Active` / `Inactive` / `Attended to D0` / `Not Attended to D0`.
@@ -97,16 +97,17 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - **View & download** — every uploaded image can be opened full-size or downloaded with a friendly filename (e.g. `bankai_Ahmed_Mohamed_id-card-front.png`). The personal photo is unique per courier — re-uploading replaces it.
 - **CSV export** — exports exactly what you currently see (with filters + sorting), UTF-8 BOM so Arabic renders correctly in Excel.
 - **Duplicate record** — from the profile/edit modals a copy button opens the add form prefilled (edit the National ID, then save).
-- **Clickable summary cards** — cards double as quick filters (click "Active" to show actives only, "Licenses Expiring" to show licenses in danger, click "Total Couriers" to reset).
+- **Clickable summary cards** — cards double as quick filters (click "Active" to show actives only, click "Total Couriers" to reset).
+- **Copy to clipboard** — click the **Phone**, **National ID** (on the card and inside the profile) or the **Outlook account** and the value is copied instantly, with a toast confirmation.
 - **Animated counters** — summary numbers ease from their previous value to the new one after every change.
-- **License expiry warnings**:
+- **License expiry warnings** (inside the courier profile only):
   - ⚠ **Red badge** — "Expired" when the license end date has passed.
   - 🟡 **Pulsing amber badge** — "Expiring in Xd" when less than 30 days remain.
-  - Expiring licenses are counted in the summary card and one click filters them.
 
 ### Design & Animations
 - Animated gradient navbar, floating ambient background blobs, glassmorphism panels.
 - Staggered row entrance animations, hover lifts on cards, glowing button shadows, skeleton loading shimmer.
+- **Modern cards**: light sweep across summary + courier cards on hover, floating gradient bubbles behind the summary icons, icon tilt on hover, zoom-in effect with a centered "view" button on every uploaded document, and staggered pop-in for the 5 document slots.
 - Fully **responsive** — works great on mobile, tablet, and desktop.
 - **Bilingual typography** — Inter for Latin text and Cairo for Arabic names, so mixed Arabic/English data renders seamlessly.
 - Toast notifications, modal pop animations, Escape key to close dialogs.
@@ -137,7 +138,7 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 ### License Expiry Warnings
 - ⚠ **Red badge** — "Expired" when the license end date has passed.
 - 🟡 **Amber badge** — "Expiring in Xd" when less than 30 days remain.
-- Expiring licenses are counted in the summary card at the top.
+- Shown on the courier profile only — there is no separate expiry summary card.
 
 ### Color Palette
 - Primary: `#1E40AF` / `#2563EB`
