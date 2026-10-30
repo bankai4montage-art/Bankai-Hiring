@@ -98,6 +98,7 @@ export const db = {
 
   /** Update all editable fields of a courier. */
   update(id, d) {
+    const r = ROW.fromClient(d);
     sqlite.prepare(`
       UPDATE couriers SET
         full_name = @full_name, phone = @phone, national_id = @national_id,
@@ -106,7 +107,7 @@ export const db = {
         outlook = @outlook, plate = @plate, status = @status,
         updated_at = @updated_at
       WHERE id = @id
-    `).run({ id, ...ROW.fromClient(d) });
+    `).run({ ...r, id }); // spread last-but-one, then pin @id to the target row
     return db.get(id);
   },
 
