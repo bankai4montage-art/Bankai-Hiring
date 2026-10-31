@@ -43,7 +43,7 @@ app.get('/api/health', (_req, res) => res.json({
 /**
  * Read: paginated + filterable list.
  *   ?page=1&pageSize=24&q=&status=&branch=&type=&sort=newest
- *   ?all=1  → plain array (used by the kanban board and CSV export)
+ *   ?all=1  → plain array (used by CSV export)
  */
 app.get('/api/couriers', (req, res) => {
   const { page, pageSize, q, status, branch, type, sort, all } = req.query;
@@ -53,7 +53,7 @@ app.get('/api/couriers', (req, res) => {
   res.json(db.list({ ...filters, page: Number(page) || 1, pageSize: Number(pageSize) || 24 }));
 });
 
-// Read: one courier + documents + pipeline history
+// Read: one courier + documents + status history
 app.get('/api/couriers/:id', (req, res) => {
   const courier = db.get(req.params.id);
   if (!courier) return res.status(404).json({ error: 'Courier not found.' });
@@ -69,7 +69,7 @@ app.get('/api/couriers/:id', (req, res) => {
 // Aggregated numbers for the KPI panel (counts, time-to-hire, documents)
 app.get('/api/metrics', (_req, res) => res.json(db.metrics()));
 
-// Recent pipeline activity
+// Recent status-change activity
 app.get('/api/events', (req, res) => {
   res.json(events.recent(Math.min(100, Number(req.query.limit) || 20)));
 });
@@ -251,7 +251,7 @@ app.put('/api/couriers/:id', (req, res) => {
   }
 });
 
-// Quick status change (kanban drag & drop + profile selector)
+// Quick status change (profile selector)
 app.patch('/api/couriers/:id/status', (req, res) => {
   const { status } = req.body;
   if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0', 'OnBoarding', 'OffBoarding'].includes(status)) {

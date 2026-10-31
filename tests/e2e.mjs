@@ -4,7 +4,7 @@
  *   npm run test:e2e
  *
  * Boots the server against a throw-away DB, opens the dashboard in a real
- * browser and walks the main flows: cards → search → pipeline → profile →
+ * browser and walks the main flows: cards → search → profile →
  * camera/drag uploads → pagination.
  *
  * Skips (exit 0 with a message) when Playwright or a Chrome binary is missing.
@@ -144,33 +144,16 @@ try {
   await page.waitForTimeout(700);
   check('clearing search restores the list', (await page.locator('#cardsGrid article').count()) === cards);
 
-  /* ---------------------------------------------------------- kanban */
-  await page.click('#viewToggle button[data-view="kanban"]');
-  await page.waitForSelector('#kanbanBoard .kanban-col', { timeout: 10000 });
-  check('pipeline shows every status column', (await page.locator('#kanbanBoard .kanban-col').count()) === 6);
-  const boardCards = await page.locator('#kanbanBoard .kanban-card').count();
-  check('pipeline contains all couriers', boardCards === cards, `${boardCards} cards`);
-
-  // move the first card to another column through the real API helper
-  const move = await page.evaluate(async () => {
-    const from = [...document.querySelectorAll('#kanbanBoard .kanban-col')].find(c => c.querySelector('.kanban-card'));
-    const card = from?.querySelector('.kanban-card');
-    if (!card) return null;
-    const target = [...document.querySelectorAll('#kanbanBoard .kanban-col')].find(c => c !== from).dataset.status;
-    await window.moveToStatus(card.dataset.id, target);
-    await new Promise(r => setTimeout(r, 900));
-    return { target, status: document.querySelector(`#kanbanBoard .kanban-col[data-status="${CSS.escape(target)}"]`).querySelectorAll('.kanban-card').length };
-  });
-  check('dragging a card changes its status', move && move.status >= 1, move ? `→ ${move.target}` : 'no card');
+  /* ---------------------------------------------------------- no pipeline board */
+  check('no kanban pipeline board in the DOM',
+    (await page.locator('#kanbanBoard, .kanban-col, #viewToggle').count()) === 0);
 
   /* ---------------------------------------------------------- profile */
-  await page.click('#viewToggle button[data-view="cards"]');
-  await page.waitForTimeout(800);
   await page.click('#cardsGrid article h3');
   await page.waitForSelector('#profilePanel .doc-slot', { timeout: 10000 });
   check('profile opens with 5 document slots', (await page.locator('#profilePanel .doc-slot').count()) === 5);
   check('profile exposes camera inputs', (await page.locator('#profilePanel input[type=file][capture]').count()) === 5);
-  check('profile shows the pipeline history', (await page.locator('#profilePanel ul li').count()) >= 1);
+  check('profile shows the status history', (await page.locator('#profilePanel ul li').count()) >= 1);
   check('profile shows time to hire', /TIME TO HIRE/i.test(await page.locator('#profilePanel').innerText()));
 
   /* ---------------------------------------------------------- upload (compressed + thumb) */

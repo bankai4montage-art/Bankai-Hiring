@@ -2,7 +2,7 @@
  * Bankai-Hiring — API tests (node:test, no extra dependencies).
  *
  * Boots the real server against a throw-away SQLite database, then exercises
- * validation, pagination, search, filters, metrics, pipeline events and the
+ * validation, pagination, search, filters, metrics, status events and the
  * document upload/preview/delete flow.
  *
  *   npm test
@@ -67,7 +67,7 @@ test('health reports the storage backend', async () => {
 
 /* ---------------------------------------------------------------- create */
 
-test('creates a courier and seeds pipeline events', async () => {
+test('creates a courier and seeds status events', async () => {
   const payload = make({ fullName: 'أحمد محمد سعيد' });
   const { status, body } = await j('/api/couriers', { method: 'POST', body: JSON.stringify(payload) });
   assert.equal(status, 201);

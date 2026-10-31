@@ -12,18 +12,18 @@ A modern, responsive full-stack web application for managing **courier hiring** 
 ```
 Bankai-Hiring/
 ├── public/
-│   ├── index.html          # Dashboard UI (list + pipeline, profiles, uploads)
+│   ├── index.html          # Dashboard UI (list, profiles, uploads)
 │   └── assets/
 │       ├── styles.css      # Compiled Tailwind CSS (self-hosted, no CDN)
 │       ├── tailwind.src.css# Build input for the CSS
 │       ├── fonts.css       # Self-hosted font-face rules
 │       └── fonts/          # Inter + Cairo woff2 files
 ├── server.js               # Express server: static frontend + REST endpoints + uploads
-├── db.js                   # SQLite layer (couriers, documents, pipeline events, migrations)
+├── db.js                   # SQLite layer (couriers, documents, status events, migrations)
 ├── storage.js              # Image storage: SQLite BLOBs or S3 / Cloudflare R2
 ├── tests/
 │   ├── api.test.js         # node:test — endpoints, validation, pagination, uploads
-│   └── e2e.mjs             # Playwright smoke test (list, pipeline, profile, upload)
+│   └── e2e.mjs             # Playwright smoke test (list, search, profile, upload)
 ├── build.js                # npm run build:css → compiles public/assets/styles.css
 ├── fetch-fonts.js          # npm run fetch:fonts → downloads self-hosted fonts (one-time)
 ├── package.json            # Dependencies & scripts
@@ -52,7 +52,7 @@ To regenerate the compiled CSS after changing markup/classes: `npm run build:css
 
 ```bash
 npm test            # API tests (node:test) — boots the server on a throw-away DB
-npm run test:e2e    # browser smoke test (Playwright) — list, search, pipeline, uploads
+npm run test:e2e    # browser smoke test (Playwright) — list, search, profile, uploads
 ```
 
 `npm run test:e2e` needs Playwright and a browser: `npm i -D playwright && npx playwright install chromium`
@@ -89,9 +89,9 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 |---|---|---|
 | GET | `/api/health` | Health check |
 | GET | `/api/couriers` | Paginated list — `page, pageSize, q, status, branch, type, sort` → `{items,total,page,pages}`; `?all=1` returns an array |
-| GET | `/api/couriers/:id` | One courier + documents + pipeline history + time-to-hire |
+| GET | `/api/couriers/:id` | One courier + documents + status history + time-to-hire |
 | GET | `/api/metrics` | Counts, document completeness and time-to-hire averages |
-| GET | `/api/events` | Recent pipeline activity (`?limit=`) |
+| GET | `/api/events` | Recent status-change activity (`?limit=`) |
 | POST | `/api/couriers` | Create (full validation, 400 + field errors on failure) |
 | PUT | `/api/couriers/:id` | Update a full record |
 | PATCH | `/api/couriers/:id/status` | Quick status change |
@@ -110,17 +110,17 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - **Global search** in the top bar (press `/` to focus) — instant search by name, phone, national ID or plate number.
 - **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), Status — plus a **Sort** selector (newest, name A→Z/Z→A, license expiring first, status, branch). Active filters appear as removable chips above the results.
 - **CSV export** from the toolbar or the sidebar "Export report" action.
-- **Two layouts** — **List** (paged cards) and **Pipeline** (a kanban board with one column per status; drag a card to another column to change the courier's status). The choice is remembered per browser.
+- **One layout** - a paged card grid (12/24/48/96 per page) with page numbers and the total count.
 - **Pagination** — server-side paging (`24` per page by default, 12/24/48/96) with page numbers and the total count.
-- **Hiring insights** — a compact strip above the results: average **time-to-hire**, hired share, documents completeness and how many are still in the pipeline.
+- **Hiring insights** — a compact strip above the results: average **time-to-hire**, hired share, documents completeness and how many are still in progress.
 - **Smart Arabic search** — searching `احمد` also finds `أحمد` (letter normalisation for أ/إ/آ/ا, ى/ي, ة/ه and tashkeel).
 
 ### CRUD Operations
 - **Create** — a clean modal form to add a new courier record with client + server validation.
-- **Read** — card or pipeline view with live search and filters, data loaded from the REST API.
+- **Read** — card list with live search and filters, data loaded from the REST API.
 - **Update**:
   - Edit any record via the same modal form (prefilled).
-  - **Quick status change** from the profile selector or by dragging the card in the pipeline board.
+  - **Quick status change** from the profile selector.
 - **Delete** — removal with a confirmation prompt.
 - **Audit trail** — every create / update / status change / document upload is recorded in `courier_events` and shown as a timeline inside the profile.
 - **Persistence** — records are stored in a **SQLite database**; changes are durable across refreshes, devices, and redeploys.

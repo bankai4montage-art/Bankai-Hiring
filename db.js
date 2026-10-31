@@ -3,7 +3,7 @@
  * Stores courier records in a single file; on Railway the file lives on a
  * persistent Volume mounted at /data so records survive re-deploys.
  *
- * v2 additions: pipeline events (audit + funnel), hired_at, pagination,
+ * v2 additions: status events (audit + funnel), hired_at, pagination,
  * Arabic-aware search text, document thumbnails and S3/R2 keys.
  */
 import Database from 'better-sqlite3';
@@ -148,7 +148,7 @@ const SELECT_WITH_PHOTO = `SELECT c.*,
   (SELECT d.thumb_size FROM documents d WHERE d.courier_id = c.id AND d.kind = 'photo' LIMIT 1) AS photo_thumb
   FROM couriers c`;
 
-/* ------------------------- Events (pipeline history) ------------------------- */
+/* ------------------------- Events (status history) ------------------------- */
 const events = {
   add(courierId, type, { from = null, to = null, note = null } = {}) {
     const id = crypto.randomUUID();
@@ -356,7 +356,7 @@ function migrateExisting() {
     tx(rows);
   }
 
-  // give old records a starting point in the pipeline timeline
+  // give old records a starting point in the status timeline
   const withoutEvents = sqlite.prepare(
     `SELECT c.id, c.status FROM couriers c
      WHERE NOT EXISTS (SELECT 1 FROM courier_events e WHERE e.courier_id = c.id)`).all();
