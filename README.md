@@ -12,14 +12,18 @@ A modern, responsive full-stack web application for managing **courier hiring** 
 ```
 Bankai-Hiring/
 ├── public/
-│   ├── index.html          # Dashboard UI (compact cards + courier profiles)
+│   ├── index.html          # Dashboard UI (list + pipeline, profiles, uploads)
 │   └── assets/
 │       ├── styles.css      # Compiled Tailwind CSS (self-hosted, no CDN)
 │       ├── tailwind.src.css# Build input for the CSS
 │       ├── fonts.css       # Self-hosted font-face rules
 │       └── fonts/          # Inter + Cairo woff2 files
-├── server.js               # Express server: static frontend + REST endpoints + document uploads
-├── db.js                   # SQLite layer (couriers + documents, 5-record seed on first boot)
+├── server.js               # Express server: static frontend + REST endpoints + uploads
+├── db.js                   # SQLite layer (couriers, documents, pipeline events, migrations)
+├── storage.js              # Image storage: SQLite BLOBs or S3 / Cloudflare R2
+├── tests/
+│   ├── api.test.js         # node:test — endpoints, validation, pagination, uploads
+│   └── e2e.mjs             # Playwright smoke test (list, pipeline, profile, upload)
 ├── build.js                # npm run build:css → compiles public/assets/styles.css
 ├── fetch-fonts.js          # npm run fetch:fonts → downloads self-hosted fonts (one-time)
 ├── package.json            # Dependencies & scripts
@@ -44,6 +48,32 @@ The database file is created at `data/bankai-hiring.db` (set `DATABASE_PATH` to 
 
 To regenerate the compiled CSS after changing markup/classes: `npm run build:css`.
 
+### Tests
+
+```bash
+npm test            # API tests (node:test) — boots the server on a throw-away DB
+npm run test:e2e    # browser smoke test (Playwright) — list, search, pipeline, uploads
+```
+
+`npm run test:e2e` needs Playwright and a browser: `npm i -D playwright && npx playwright install chromium`
+(or set `CHROME_PATH` to an installed Chrome). It skips cleanly when no browser is found.
+
+### Image storage (optional S3 / R2)
+
+By default images are stored as BLOBs in SQLite. To keep them in a bucket instead:
+
+| Variable | Example | Notes |
+|---|---|---|
+| `S3_BUCKET` | `bankai-hiring` | required to enable S3 mode |
+| `S3_ENDPOINT` | `https://<account>.r2.cloudflarestorage.com` | leave empty for AWS S3 |
+| `S3_REGION` | `auto` (R2) / `eu-west-1` (AWS) | defaults to `auto` |
+| `S3_ACCESS_KEY_ID` | — | required |
+| `S3_SECRET_ACCESS_KEY` | — | required |
+| `S3_PUBLIC_BASE_URL` | `https://cdn.example.com` | optional: images are 302-redirected here |
+| `S3_PREFIX` | `bankai-hiring` | key prefix inside the bucket |
+
+`/api/health` reports the active backend (`storage.mode`). Without `S3_PUBLIC_BASE_URL` the API streams the objects itself, so the app works either way.
+
 ### Railway (production)
 
 Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
@@ -58,14 +88,16 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/health` | Health check |
-| GET | `/api/couriers` | List all couriers (including personal-photo IDs) |
-| GET | `/api/couriers/:id` | One courier + documents metadata (profile) |
+| GET | `/api/couriers` | Paginated list — `page, pageSize, q, status, branch, type, sort` → `{items,total,page,pages}`; `?all=1` returns an array |
+| GET | `/api/couriers/:id` | One courier + documents + pipeline history + time-to-hire |
+| GET | `/api/metrics` | Counts, document completeness and time-to-hire averages |
+| GET | `/api/events` | Recent pipeline activity (`?limit=`) |
 | POST | `/api/couriers` | Create (full validation, 400 + field errors on failure) |
 | PUT | `/api/couriers/:id` | Update a full record |
 | PATCH | `/api/couriers/:id/status` | Quick status change |
 | DELETE | `/api/couriers/:id` | Delete a record (its documents cascade) |
-| POST | `/api/couriers/:id/documents` | Upload image (kind: photo / id_front / id_back / license_front / license_back) |
-| GET | `/api/documents/:id` | View image inline |
+| POST | `/api/couriers/:id/documents` | Upload image (`kind` + `file` + optional `thumb`) |
+| GET | `/api/documents/:id` | View image inline (`?thumb=1` for the preview) |
 | GET | `/api/documents/:id?download=1` | Download image as file |
 | DELETE | `/api/documents/:id` | Delete an image |
 
@@ -78,24 +110,31 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - **Global search** in the top bar (press `/` to focus) — instant search by name, phone, national ID or plate number.
 - **Quick filters**: Branch (`QCD1`/`QCD2`), Employment Type (`Full Time`/`Part Time`), Status — plus a **Sort** selector (newest, name A→Z/Z→A, license expiring first, status, branch). Active filters appear as removable chips above the results.
 - **CSV export** from the toolbar or the sidebar "Export report" action.
+- **Two layouts** — **List** (paged cards) and **Pipeline** (a kanban board with one column per status; drag a card to another column to change the courier's status). The choice is remembered per browser.
+- **Pagination** — server-side paging (`24` per page by default, 12/24/48/96) with page numbers and the total count.
+- **Hiring insights** — a compact strip above the results: average **time-to-hire**, hired share, documents completeness and how many are still in the pipeline.
+- **Smart Arabic search** — searching `احمد` also finds `أحمد` (letter normalisation for أ/إ/آ/ا, ى/ي, ة/ه and tashkeel).
 
 ### CRUD Operations
 - **Create** — a clean modal form to add a new courier record with client + server validation.
-- **Read** — card view with live search and filters, data loaded from the REST API.
+- **Read** — card or pipeline view with live search and filters, data loaded from the REST API.
 - **Update**:
   - Edit any record via the same modal form (prefilled).
-  - **Quick status change** directly from the table row (dropdown) for `Active` / `Inactive` / `Attended to D0` / `Not Attended to D0`.
+  - **Quick status change** from the profile selector or by dragging the card in the pipeline board.
 - **Delete** — removal with a confirmation prompt.
+- **Audit trail** — every create / update / status change / document upload is recorded in `courier_events` and shown as a timeline inside the profile.
 - **Persistence** — records are stored in a **SQLite database**; changes are durable across refreshes, devices, and redeploys.
 
 ### Extra Features
-- **Courier profiles** — clicking a card opens a full profile with every field, an inline status chip + quick status selector, and an Edit shortcut.
+- **Courier profiles** — clicking a card opens a full profile with every field, an inline status chip + quick status selector, an Edit shortcut, the **activity timeline** and the **time-to-hire** badge.
 - **Photo & document uploads** — every profile has 5 upload slots:
   - 🧑 **Personal photo** — shown on the compact card avatar too (upload once, visible everywhere).
   - 🪪 **ID card** — front & back.
   - 📜 **Personal license** — front & back.
-  Images are stored directly in SQLite (max 5MB, JPG/PNG/WEBP) and survive redeploys on the Railway Volume.
-- **View & download** — every uploaded image can be opened full-size or downloaded with a friendly filename (e.g. `bankai_Ahmed_Mohamed_id-card-front.png`). The personal photo is unique per courier — re-uploading replaces it.
+- **Three ways to add an image**: file picker, **camera capture** on mobile (`capture="environment"`), or **drag & drop / paste** straight onto the slot.
+- **Automatic compression** — images are downscaled to 1600px and re-encoded as JPEG in the browser before upload (a 5MB photo usually lands around 200-400KB), and a **480px thumbnail** is generated for the cards, so the dashboard stays fast.
+- **Storage backends** — images live in SQLite by default; set the `S3_*` variables to store them in **AWS S3 / Cloudflare R2** instead (the DB then keeps only metadata + keys).
+- **View & download** — every uploaded image can be opened full-size or downloaded with a friendly filename (e.g. `bankai_Ahmed_Mohamed_id-card-front.png`). The personal photo is unique per courier — re-uploading replaces it (and deletes the old objects).
 - **CSV export** — exports exactly what you currently see (with filters + sorting), UTF-8 BOM so Arabic renders correctly in Excel.
 - **Duplicate record** — from the profile/edit modals a copy button opens the add form prefilled (edit the National ID, then save).
 - **Clickable summary cards** — cards double as quick filters (click "Active" to show actives only, click "Total Couriers" to reset).

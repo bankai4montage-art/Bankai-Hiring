@@ -7,12 +7,15 @@
   "scripts": {
     "start": "node server.js",
     "build:css": "node build.js",
-    "fetch:fonts": "node fetch-fonts.js"
+    "fetch:fonts": "node fetch-fonts.js",
+    "test": "node --test tests/api.test.js",
+    "test:e2e": "node tests/e2e.mjs"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
     "better-sqlite3": "^12.4.1",
     "express": "^4.21.2",
     "multer": "^2.5.0"
@@ -21,6 +24,7 @@
     "better-sqlite3@12.11.1": true
   },
   "devDependencies": {
+    "playwright": "^1.64.1",
     "tailwindcss": "^3.4.17"
   }
 }

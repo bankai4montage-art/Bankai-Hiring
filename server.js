@@ -5,16 +5,19 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { db, docs, seedIfEmpty, listCouriers } from './db.js';
+import { db, docs, events, seedIfEmpty } from './db.js';
+import { storage, s3Enabled, objectKey } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
-/* Courier images (max 5MB, images only) kept in-memory then persisted as blobs */
+/* Courier images (max 5MB each, images only). Two files per upload:
+   `file` = the compressed full image, `thumb` = small preview for cards. */
 const KINDS = ['photo', 'id_front', 'id_back', 'license_front', 'license_back'];
 const KIND_LABELS = {
   photo: 'personal-photo', id_front: 'id-card-front', id_back: 'id-card-back',
@@ -23,88 +26,163 @@ const KIND_LABELS = {
 const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 2 },
   fileFilter: (_req, file, cb) => cb(null, !!MIME_EXT[file.mimetype])
 });
 
 /* ------------------------- Static frontend ------------------------- */
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* ------------------------- API: Couriers CRUD ------------------------- */
+/* ------------------------- API: Couriers ------------------------- */
 
-// Health check (used by Railway)
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'bankai-hiring' }));
+// Health check (used by Railway) — also reports the storage backend
+app.get('/api/health', (_req, res) => res.json({
+  ok: true, service: 'bankai-hiring', version: 2, storage: storage.info()
+}));
 
-// Read: all couriers
-app.get('/api/couriers', (_req, res) => {
-  res.json(listCouriers());
+/**
+ * Read: paginated + filterable list.
+ *   ?page=1&pageSize=24&q=&status=&branch=&type=&sort=newest
+ *   ?all=1  → plain array (used by the kanban board and CSV export)
+ */
+app.get('/api/couriers', (req, res) => {
+  const { page, pageSize, q, status, branch, type, sort, all } = req.query;
+  const filters = { q: String(q || ''), status: String(status || ''), branch: String(branch || ''),
+                    type: String(type || ''), sort: String(sort || 'newest') };
+  if (String(all) === '1') return res.json(db.filterAll(filters));
+  res.json(db.list({ ...filters, page: Number(page) || 1, pageSize: Number(pageSize) || 24 }));
 });
 
-// Read: one courier + its documents metadata (profile view)
+// Read: one courier + documents + pipeline history
 app.get('/api/couriers/:id', (req, res) => {
   const courier = db.get(req.params.id);
   if (!courier) return res.status(404).json({ error: 'Courier not found.' });
   const documents = docs.list(courier.id);
   res.json({
     ...courier,
-    photo: documents.find(d => d.kind === 'photo')?.id || null, // so the header avatar renders
-    documents
+    photo: documents.find(d => d.kind === 'photo')?.id || null,
+    documents,
+    events: events.list(courier.id, 30)
   });
 });
 
-/* ------------------------- Documents: upload / view / download / delete ------------------------- */
+// Aggregated numbers for the KPI panel (counts, time-to-hire, documents)
+app.get('/api/metrics', (_req, res) => res.json(db.metrics()));
 
-// Upload an image (kind: photo | id_front | id_back | license_front | license_back)
-app.post('/api/couriers/:id/documents', upload.single('file'), (req, res) => {
-  const courier = db.get(req.params.id);
-  if (!courier) return res.status(404).json({ error: 'Courier not found.' });
-
-  const kind = String(req.body.kind || '');
-  if (!KINDS.includes(kind)) return res.status(400).json({ error: 'Invalid document kind.' });
-  if (!req.file) return res.status(400).json({ error: 'No image file received (jpg/png/webp, max 5MB).' });
-
-  // Personal photo is unique: replace any previous photo document
-  if (kind === 'photo') {
-    docs.list(courier.id).filter(d => d.kind === 'photo').forEach(d => docs.remove(d.id));
-  }
-
-  const doc = docs.add({
-    courierId: courier.id,
-    kind,
-    mime: req.file.mimetype,
-    size: req.file.size,
-    data: req.file.buffer
-  });
-  res.status(201).json(doc);
+// Recent pipeline activity
+app.get('/api/events', (req, res) => {
+  res.json(events.recent(Math.min(100, Number(req.query.limit) || 20)));
 });
 
-// View (inline) or download (?download=1) a stored image
-app.get('/api/documents/:id', (req, res) => {
-  const doc = docs.get(req.params.id);
-  if (!doc) return res.status(404).json({ error: 'Document not found.' });
+/* ------------------------- Documents ------------------------- */
 
+function sendImage(res, doc, buf, { thumb = false, download = false } = {}) {
   const courier = db.get(doc.courier_id);
   const name = courier ? courier.fullName.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() : 'courier';
   const ext = MIME_EXT[doc.mime] || 'jpg';
-  const filename = `bankai-${name}-${KIND_LABELS[doc.kind]}.${ext}`.replace(/\s+/g, '_');
+  const suffix = thumb ? '-preview' : '';
+  const filename = `bankai-${name}-${KIND_LABELS[doc.kind]}${suffix}.${ext}`.replace(/\s+/g, '_');
 
-  res.setHeader('Content-Type', doc.mime);
-  res.setHeader('Cache-Control', 'private, max-age=3600');
-  if (req.query.download) {
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-  } else {
-    res.setHeader('Content-Disposition', `inline`);
+  res.setHeader('Content-Type', doc.mime || 'image/jpeg');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('Content-Disposition', download
+    ? `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`
+    : 'inline');
+  res.send(buf);
+}
+
+// Upload (or replace) an image. Multipart: kind, file, thumb?
+app.post('/api/couriers/:id/documents', upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumb', maxCount: 1 }]),
+  async (req, res) => {
+    try {
+      const courier = db.get(req.params.id);
+      if (!courier) return res.status(404).json({ error: 'Courier not found.' });
+
+      const kind = String(req.body.kind || '');
+      if (!KINDS.includes(kind)) return res.status(400).json({ error: 'Invalid document kind.' });
+
+      const file = req.files?.file?.[0];
+      const thumb = req.files?.thumb?.[0];
+      if (!file) return res.status(400).json({ error: 'No image file received (jpg/png/webp, max 5MB).' });
+
+      // Personal photo is unique: replace the previous one (and its stored objects)
+      if (kind === 'photo') {
+        for (const d of docs.list(courier.id).filter(d => d.kind === 'photo')) {
+          const old = docs.get(d.id);
+          if (old) { await storage.del(old.file_key); await storage.del(old.thumb_key); }
+          docs.remove(d.id);
+        }
+      }
+
+      const docId = crypto.randomUUID();
+      const ext = MIME_EXT[file.mimetype];
+      const key = objectKey(courier.id, docId, '', ext);
+      const stored = await storage.put(key, file.buffer, file.mimetype);
+
+      let storedThumb = { storage: 'db', key: null };
+      let thumbExt = ext;
+      if (thumb) {
+        thumbExt = MIME_EXT[thumb.mimetype] || ext;
+        storedThumb = await storage.put(objectKey(courier.id, docId, 'thumb', thumbExt), thumb.buffer, thumb.mimetype);
+      }
+
+      const doc = docs.add({
+        id: docId,
+        courierId: courier.id,
+        kind,
+        mime: file.mimetype,
+        size: file.size,
+        data: stored.storage === 'db' ? file.buffer : null,
+        thumb: storedThumb.storage === 'db' && thumb ? thumb.buffer : null,
+        thumbSize: thumb ? thumb.size : null,
+        storage: stored.storage,
+        fileKey: stored.key,
+        thumbKey: storedThumb.key
+      });
+
+      events.add(courier.id, 'document', { note: kind });
+      res.status(201).json(doc);
+    } catch (err) {
+      console.error('upload failed:', err);
+      res.status(500).json({ error: 'Could not store the image.' });
+    }
+  });
+
+// View inline, preview (?thumb=1) or download (?download=1)
+app.get('/api/documents/:id', async (req, res) => {
+  try {
+    const doc = docs.get(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+
+    const wantThumb = req.query.thumb != null && doc.thumb_size;
+    if (doc.storage === 's3') {
+      const key = wantThumb ? doc.thumb_key : doc.file_key;
+      const pub = storage.publicUrl(key);
+      if (pub && !req.query.download) return res.redirect(302, pub);
+      const buf = await storage.get(key);
+      return sendImage(res, doc, buf, { thumb: wantThumb, download: !!req.query.download });
+    }
+
+    const buf = wantThumb ? doc.thumb : doc.data;
+    if (!buf) return res.status(404).json({ error: 'Document data missing.' });
+    sendImage(res, doc, buf, { thumb: wantThumb, download: !!req.query.download });
+  } catch (err) {
+    console.error('document read failed:', err);
+    res.status(500).json({ error: 'Could not read the image.' });
   }
-  res.send(doc.data);
 });
 
-// Delete a stored image
-app.delete('/api/documents/:id', (req, res) => {
+// Delete a stored image (DB row + S3 objects)
+app.delete('/api/documents/:id', async (req, res) => {
   const doc = docs.get(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
+  await storage.del(doc.file_key);
+  await storage.del(doc.thumb_key);
   docs.remove(doc.id);
   res.json({ ok: true });
 });
+
+/* ------------------------- Validation ------------------------- */
 
 // Server-side validation (mirrors the client-side rules)
 function validate(data) {
@@ -143,8 +221,7 @@ app.post('/api/couriers', (req, res) => {
   if (Object.keys(errors).length) return res.status(400).json({ errors });
 
   try {
-    const created = db.create(data);
-    res.status(201).json(created);
+    res.status(201).json(db.create(data));
   } catch (err) {
     if (String(err.message).includes('UNIQUE')) {
       return res.status(409).json({ errors: { nationalId: 'A courier with this National ID already exists.' } });
@@ -174,7 +251,7 @@ app.put('/api/couriers/:id', (req, res) => {
   }
 });
 
-// Quick status change
+// Quick status change (kanban drag & drop + profile selector)
 app.patch('/api/couriers/:id/status', (req, res) => {
   const { status } = req.body;
   if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0', 'OnBoarding', 'OffBoarding'].includes(status)) {
@@ -186,15 +263,20 @@ app.patch('/api/couriers/:id/status', (req, res) => {
 });
 
 // Delete
-app.delete('/api/couriers/:id', (req, res) => {
-  const deleted = db.remove(req.params.id);
-  if (!deleted) return res.status(404).json({ error: 'Courier not found.' });
-  res.json({ ok: true });
+app.delete('/api/couriers/:id', async (req, res) => {
+  const courier = db.get(req.params.id);
+  if (!courier) return res.status(404).json({ error: 'Courier not found.' });
+  for (const d of docs.list(courier.id)) {
+    const row = docs.get(d.id);
+    if (row) { await storage.del(row.file_key); await storage.del(row.thumb_key); }
+  }
+  res.json({ ok: db.remove(courier.id) });
 });
 
 /* ------------------------- Boot ------------------------- */
-seedIfEmpty(); // first run: 4 realistic demo records
+seedIfEmpty(); // first run: 5 realistic demo records
 
 app.listen(PORT, () => {
-  console.log(`✅ Bankai-Hiring API + dashboard running on port ${PORT}`);
+  console.log(`✅ Bankai-Hiring API + dashboard running on port ${PORT} (storage: ${storage.mode})`);
+  if (!s3Enabled) console.log('ℹ️  S3/R2 not configured — images are stored as SQLite BLOBs.');
 });

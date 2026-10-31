@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bankai-Hiring | Courier Hiring Management</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563EB'/%3E%3Cpath d='M8 9h6l3 6M11 22a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm13 0a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm-1-5h-3a5 5 0 0 1-5-5m6 0h2l3 6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <meta name="description" content="Bankai-Hiring — a modern dashboard for managing courier hiring: records, branches, licenses and status tracking." />
 
   <!-- Fully self-hosted assets: no external CDNs (fonts + styles are local files) -->
@@ -447,17 +448,34 @@
             <h3 class="text-[15px] font-extrabold text-ink leading-tight">Couriers</h3>
             <p id="resultCount" class="text-[12px] text-slate-500 mt-0.5"></p>
           </div>
-          <div class="flex items-center gap-2 text-[11px] font-semibold text-slate-400">
-            <span class="inline-flex items-center gap-1.5">
+          <div class="flex items-center gap-2.5">
+            <!-- View toggle: cards / kanban -->
+            <div class="view-toggle" id="viewToggle" role="group" aria-label="Layout">
+              <button type="button" data-view="cards" class="on" aria-pressed="true" title="Card list">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                <span>List</span>
+              </button>
+              <button type="button" data-view="kanban" aria-pressed="false" title="Pipeline board">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="10" rx="1.5"/><rect x="16" y="4" width="5" height="13" rx="1.5"/></svg>
+                <span>Pipeline</span>
+              </button>
+            </div>
+            <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h6"/></svg>
               <span id="activeSortLabel">Newest first</span>
             </span>
           </div>
         </div>
 
+        <!-- ============================= INSIGHTS STRIP ============================= -->
+        <section id="insights" class="insights shell-in" style="animation-delay:.2s" aria-label="Hiring insights"></section>
+
         <!-- ============================= COURIER CARDS ============================= -->
         <section id="couriers" class="scroll-mt-24">
           <div id="cardsGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+
+          <!-- Kanban / pipeline board -->
+          <div id="kanbanBoard" class="kanban hidden" aria-label="Hiring pipeline"></div>
 
           <!-- Loading skeleton -->
           <div id="loadingState" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -485,6 +503,9 @@
               Clear all filters
             </button>
           </div>
+
+          <!-- Pagination -->
+          <nav id="pagination" class="pagination hidden" aria-label="Pagination"></nav>
         </section>
       </main>
     </div>
@@ -493,6 +514,60 @@
   <style>
     .btn-ghost-dark { width: 32px; height: 32px; place-items: center; border-radius: 10px; color: #94A3B8; background: rgba(255,255,255,.06); transition: color .2s, background .2s; }
     .btn-ghost-dark:hover { color: #fff; background: rgba(255,255,255,.14); }
+
+    /* ---------- v3: view toggle ---------- */
+    .view-toggle{display:inline-flex;background:#F1F5F9;border-radius:11px;padding:3px;gap:2px}
+    .view-toggle button{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;font-size:11.5px;font-weight:700;color:#64748B;transition:background .18s,color .18s,box-shadow .18s}
+    .view-toggle button svg{width:13px;height:13px}
+    .view-toggle button.on{background:#fff;color:#1E40AF;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+    @media(max-width:639px){.view-toggle button span{display:none}.view-toggle button{padding:7px 9px}}
+
+    /* ---------- v3: insights ---------- */
+    .insights{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    @media(min-width:900px){.insights{grid-template-columns:repeat(4,minmax(0,1fr))}}
+    .insight{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E8EEF6;border-radius:14px;padding:11px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+    .insight .ico{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none}
+    .insight .ico svg{width:16px;height:16px}
+    .insight .lbl{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7C8CA3}
+    .insight .val{font-size:18px;font-weight:800;color:#0F172A;line-height:1.15;font-variant-numeric:tabular-nums}
+    .insight .val small{font-size:11px;font-weight:700;color:#64748B;margin-inline-start:3px}
+
+    /* ---------- v3: kanban ---------- */
+    .kanban{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 14px;scrollbar-width:thin}
+    .kanban-col{flex:0 0 264px;background:#F8FAFC;border:1px solid #E8EEF6;border-radius:16px;display:flex;flex-direction:column;max-height:calc(100vh - 250px);transition:background .18s,border-color .18s}
+    .kanban-col.over{background:#EFF6FF;border-color:#BFDBFE;box-shadow:inset 0 0 0 2px #BFDBFE}
+    .kanban-col-h{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid #EEF2F7}
+    .kanban-col-h .dot{width:8px;height:8px;border-radius:99px}
+    .kanban-col-h b{font-size:12px;font-weight:800;color:#334155}
+    .kanban-col-h .n{margin-inline-start:auto;font-size:11px;font-weight:800;color:#64748B;background:#fff;border-radius:99px;padding:1px 8px;border:1px solid #EEF2F7}
+    .kanban-list{display:flex;flex-direction:column;gap:8px;padding:10px;overflow-y:auto;min-height:90px}
+    .kanban-card{background:#fff;border:1px solid #E8EEF6;border-radius:12px;padding:9px 10px;cursor:grab;box-shadow:0 1px 2px rgba(15,23,42,.05);transition:box-shadow .18s,transform .18s,border-color .18s;touch-action:manipulation}
+    .kanban-card:hover{box-shadow:0 6px 16px -6px rgba(30,64,175,.25);border-color:#BFDBFE}
+    .kanban-card:active{cursor:grabbing}
+    .kanban-card.dragging{opacity:.4;transform:rotate(1.5deg)}
+    .kanban-card .kn{font-size:12.5px;font-weight:800;color:#0F172A;line-height:1.3}
+    .kanban-card .km{font-size:10.5px;color:#7C8CA3;font-variant-numeric:tabular-nums}
+    .kanban-card .kf{display:flex;align-items:center;gap:5px;margin-top:6px;flex-wrap:wrap}
+    .kanban-empty{text-align:center;font-size:11.5px;color:#94A3B8;padding:16px 8px;border:1px dashed #E2E8F0;border-radius:10px}
+
+    /* ---------- v3: pagination ---------- */
+    .pagination{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;padding:14px 0 4px}
+    .pagination button{min-width:34px;height:34px;padding:0 10px;border-radius:10px;border:1px solid #E2E8F0;background:#fff;font-size:12.5px;font-weight:700;color:#334155;transition:background .15s,border-color .15s,color .15s,transform .12s}
+    .pagination button:hover:not(:disabled){background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF}
+    .pagination button:active:not(:disabled){transform:scale(.95)}
+    .pagination button[disabled]{opacity:.4;cursor:not-allowed}
+    .pagination button.on{background:linear-gradient(135deg,#2563EB,#1E40AF);border-color:transparent;color:#fff;box-shadow:0 6px 14px -6px rgba(37,99,235,.7)}
+    .pagination .info{font-size:12px;font-weight:600;color:#64748B;margin-inline-end:6px}
+    .pagination select{padding:6px 26px 6px 10px;font-size:12px;border-radius:9px;border:1px solid #E2E8F0;background:#fff}
+
+    /* ---------- v3: document drop / capture ---------- */
+    .doc-slot.dragover{border-color:#2563EB !important;background:#EFF6FF !important;box-shadow:inset 0 0 0 2px rgba(37,99,235,.25)}
+    .doc-slot.pasting{border-color:#60A5FA !important}
+    .doc-busy{position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,255,255,.82);backdrop-filter:blur(2px);z-index:3;border-radius:.75rem}
+    .doc-busy .spin{width:22px;height:22px;border-radius:50%;border:2.5px solid #DBEAFE;border-top-color:#2563EB;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .doc-hint{position:absolute;left:0;right:0;bottom:0;padding:10px 6px 6px;text-align:center;font-size:9px;font-weight:700;color:#fff;background:linear-gradient(to top,rgba(15,30,69,.72),transparent);opacity:0;transition:opacity .2s}
+    .doc-slot:hover .doc-hint{opacity:1}
   </style>
 
   <!-- ============================= ADD / EDIT MODAL (above profile) ============================= -->
@@ -704,9 +779,15 @@
 
     /* ------------------------- UI state ------------------------- */
 
-    let state = [];
     let deleteTargetId = null;
-    let cardFilter = { status: null }; // summary cards double as filter chips
+    let cardFilter = { status: null }; // KPI tiles / sidebar rows double as filter chips
+
+    const model = {
+      items: [], total: 0, page: 1, pages: 1, pageSize: 24,
+      all: [], metrics: null, view: 'cards', loading: false
+    };
+    /** Current rows (kept for compatibility with the CRUD helpers). */
+    let state = [];
 
     /* ------------------------- API layer ------------------------- */
 
@@ -723,18 +804,72 @@
       return body;
     }
 
-    async function refresh() {
-      qs('#loadingState').classList.remove('hidden');
-      qs('#cardsGrid').innerHTML = '';
-      qs('#emptyState').classList.add('hidden');
+    /* ------------------------- Query / loading ------------------------- */
+
+    const debounce = (fn, ms = 260) => {
+      let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+    };
+
+    function currentFilters() {
+      return {
+        q: qs('#searchInput').value.trim(),
+        status: cardFilter.status || qs('#filterStatus').value,
+        branch: qs('#filterBranch').value,
+        type: qs('#filterType').value,
+        sort: qs('#sortBy').value
+      };
+    }
+
+    async function loadMetrics() {
+      try { model.metrics = await api('/metrics'); } catch { /* keep previous numbers */ }
+    }
+
+    async function loadCouriers({ skeleton = true, keepScroll = false } = {}) {
+      if (model.loading) return;
+      model.loading = true;
+      const f = currentFilters();
+      const y = window.scrollY;
+      if (skeleton && model.view === 'cards') {
+        qs('#loadingState').classList.remove('hidden');
+        qs('#cardsGrid').innerHTML = '';
+        qs('#emptyState').classList.add('hidden');
+      }
       try {
-        state = await api('/couriers');
-        rerender();
+        if (model.view === 'kanban') {
+          const q = new URLSearchParams({ all: '1', q: f.q, status: '', branch: f.branch, type: f.type, sort: f.sort });
+          model.all = await api('/couriers?' + q);
+          state = model.all;
+          model.total = model.all.length;
+        } else {
+          const q = new URLSearchParams({
+            page: String(model.page), pageSize: String(model.pageSize),
+            q: f.q, status: f.status, branch: f.branch, type: f.type, sort: f.sort
+          });
+          const data = await api('/couriers?' + q);
+          model.items = data.items;
+          model.total = data.total;
+          model.page = data.page;
+          model.pages = data.pages;
+          state = model.items;
+        }
+        renderAll();
+        if (keepScroll) window.scrollTo(0, y);
       } catch (err) {
         toast(err.message || 'Could not load data from the server.', 'error');
       } finally {
+        model.loading = false;
         qs('#loadingState').classList.add('hidden');
       }
+    }
+
+    async function refresh() {
+      await Promise.all([loadMetrics(), loadCouriers()]);
+    }
+
+    /** After any mutation: refresh numbers + rows (keeps the current view/page). */
+    async function reload() {
+      await loadMetrics();
+      await loadCouriers({ skeleton: false, keepScroll: true });
     }
 
     /* ------------------------- Summary cards ------------------------- */
@@ -789,8 +924,9 @@
     const kpiDelay = (i) => (kpiAnimated ? '' : `animation-delay:${i * 45}ms`);
 
     function renderSummary() {
-      const byStatus = (s) => state.filter(r => r.status === s).length;
-      const total = state.length;
+      const m = model.metrics || { total: 0, byStatus: {} };
+      const total = m.total || 0;
+      const byStatus = (s) => (m.byStatus || {})[s] || 0;
       const share = (n) => (total ? Math.max(Math.round((n / total) * 100), n ? 4 : 0) : 0);
 
       qs('#summaryCards').innerHTML = `
@@ -806,13 +942,14 @@
         ${STATUSES.map((s, idx) => {
           const tone = STATUS_TONE[s];
           const on = cardFilter.status === s;
+          const n = byStatus(s);
           return `          <button type="button" onclick="toggleCard('${escAttr(s)}')" class="kpi-tile ${on ? 'on' : ''} ${kpiAnim()}" style="${kpiDelay(idx + 1)}"
             title="${escAttr(s)} — click to filter">
             <div class="kpi-ico" style="background:${tone.bg};color:${tone.fg}">${icon(STATUS_ICON[s])}</div>
             <div class="kpi-body">
               <p class="kpi-label">${esc(s)}</p>
-              <p class="kpi-value">${animatedValue(s, byStatus(s))}</p>
-              <div class="kpi-share"><i style="width:${share(byStatus(s))}%;background:${tone.bar}"></i></div>
+              <p class="kpi-value">${animatedValue(s, n)}</p>
+              <div class="kpi-share"><i style="width:${share(n)}%;background:${tone.bar}"></i></div>
             </div>
           </button>`;
         }).join('')}`;
@@ -824,138 +961,238 @@
 
     /** Sidebar status quick-filters + counters. */
     function renderSidebar() {
-      const byStatus = (s) => state.filter(r => r.status === s).length;
+      const m = model.metrics || { total: 0, byStatus: {} };
+      const byStatus = (s) => (m.byStatus || {})[s] || 0;
       qs('#sideStatusList').innerHTML = STATUSES.map(s => `
         <button type="button" class="side-status ${cardFilter.status === s ? 'on' : ''}" onclick="toggleCard('${escAttr(s)}')">
           <span class="dot" style="background:${STATUS_TONE[s].bar}"></span>
           <span class="truncate">${esc(s)}</span>
           <span class="cnt">${byStatus(s)}</span>
         </button>`).join('');
-      qs('#sideTotal').textContent = state.length;
+      qs('#sideTotal').textContent = m.total || 0;
     }
 
-    /** Summary cards act as quick filters. */
-    function toggleCard(key) {
-      if (!key) { // "Total" card resets filters
-        cardFilter = { status: null };
-      } else if (cardFilter.status === key) {
-        cardFilter.status = null;
-      } else {
-        cardFilter.status = key;
-      }
-      qs('#filterStatus').value = cardFilter.status ?? ''; // keep toolbar in sync
+    /** Hiring insights: time-to-hire, documents completeness, hired share. */
+    function renderInsights() {
+      const m = model.metrics;
+      const box = qs('#insights');
+      if (!m) { box.innerHTML = ''; return; }
+      const tth = m.timeToHire || {};
+      const docs = m.documents || { complete: 0, incomplete: 0 };
+      const docPct = m.total ? Math.round((docs.complete / m.total) * 100) : 0;
+      const hiredPct = m.total ? Math.round(((m.hired || 0) / m.total) * 100) : 0;
+
+      const cell = (ico, bg, fg, label, value, sub = '') => `
+        <div class="insight">
+          <div class="ico" style="background:${bg};color:${fg}">${icon(ico)}</div>
+          <div class="min-w-0">
+            <p class="lbl">${label}</p>
+            <p class="val">${value}${sub ? `<small>${sub}</small>` : ''}</p>
+          </div>
+        </div>`;
+
+      box.innerHTML = [
+        cell('M12 8v4l2.5 2.5M12 3a9 9 0 1 1 0 18 9 9 0 1 1 0-18Z', '#EFF6FF', '#2563EB',
+          'Avg time to hire', (tth.avgDays ?? '—'), tth.avgDays != null ? 'days' : ''),
+        cell('M9 12l2 2 4-4M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z', '#ECFDF5', '#059669',
+          'Hired', (m.hired ?? 0), `${hiredPct}%`),
+        cell('M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z', '#EEF2FF', '#4F46E5',
+          'Docs complete', `${docPct}%`, `${docs.complete}/${m.total}`),
+        cell('M4 6a2 2 0 0 1 2-2h4v7H4V6Zm8-2h6a2 2 0 0 1 2 2v4h-8V4ZM4 13h8v9H6a2 2 0 0 1-2-2v-7Zm8 0h8v7a2 2 0 0 1-2 2h-6v-9Z', '#FFF7ED', '#D97706',
+          'In pipeline', ((m.byStatus && (m.byStatus.OnBoarding || 0)) + (m.byStatus && (m.byStatus['Attended to D0'] || 0))), 'couriers')
+      ].join('');
+    }
+
+    function renderMeta() {
+      const m = model.metrics;
+      qs('#resultCount').textContent = model.view === 'kanban'
+        ? `${model.total} courier${model.total === 1 ? '' : 's'} in the pipeline`
+        : (model.total
+            ? `${model.total} record${model.total === 1 ? '' : 's'} · page ${model.page} of ${model.pages}`
+            : 'No records match the current filters');
+      qs('#navCount').textContent = String(m?.total ?? model.total);
+      qs('#activeSortLabel').textContent = qs('#sortBy').selectedOptions[0].textContent;
+    }
+
+    function renderAll() {
+      renderMeta();
       renderSummary();
-      renderCards();
+      renderInsights();
+      renderChips();
+      const kanban = model.view === 'kanban';
+      qs('#cardsGrid').classList.toggle('hidden', kanban);
+      qs('#kanbanBoard').classList.toggle('hidden', !kanban);
+      qs('#pagination').classList.toggle('hidden', kanban);
+      if (kanban) renderKanban();
+      else { renderCards(); renderPagination(); }
     }
 
-    /* ------------------------- Filtering & sorting ------------------------- */
+    /** KPI / sidebar click → filter by status (and back to page 1). */
+    function toggleCard(key) {
+      cardFilter.status = (cardFilter.status === key) ? null : key;
+      qs('#filterStatus').value = cardFilter.status ?? '';
+      model.page = 1;
+      renderSummary();
+      loadCouriers({ keepScroll: true });
+    }
 
-    function getFiltered() {
-      const q = qs('#searchInput').value.trim().toLowerCase();
-      const branch = qs('#filterBranch').value;
-      const type = qs('#filterType').value;
-      const status = cardFilter.status || qs('#filterStatus').value;
+    /* ------------------------- Pagination ------------------------- */
 
-      return state.filter(r => {
-        const matchesQ = !q ||
-          r.fullName.toLowerCase().includes(q) ||
-          r.phone.toLowerCase().includes(q) ||
-          r.nationalId.includes(q) ||
-          (r.plate || '').toLowerCase().includes(q);
-        return matchesQ &&
-          (!branch || r.branch === branch) &&
-          (!type || r.employmentType === type) &&
-          (!status || r.status === status);
+    function renderPagination() {
+      const box = qs('#pagination');
+      if (model.total <= model.pageSize) { box.innerHTML = ''; return; }
+
+      const pages = [];
+      const cur = model.page, last = model.pages;
+      const push = (n) => pages.push(`<button type="button" data-page="${n}" class="${n === cur ? 'on' : ''}" aria-current="${n === cur}">${n}</button>`);
+      const dots = () => pages.push('<span class="text-slate-400 px-1">…</span>');
+
+      push(1);
+      if (cur > 3) dots();
+      for (let n = Math.max(2, cur - 1); n <= Math.min(last - 1, cur + 1); n++) push(n);
+      if (cur < last - 2) dots();
+      if (last > 1) push(last);
+
+      box.innerHTML = `
+        <span class="info">${model.total} total</span>
+        <button type="button" data-page="${cur - 1}" ${cur <= 1 ? 'disabled' : ''} aria-label="Previous page">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></svg>
+        </button>
+        ${pages.join('')}
+        <button type="button" data-page="${cur + 1}" ${cur >= last ? 'disabled' : ''} aria-label="Next page">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <select id="pageSize" aria-label="Rows per page">
+          ${[12, 24, 48, 96].map(n => `<option value="${n}" ${n === model.pageSize ? 'selected' : ''}>${n} / page</option>`).join('')}
+        </select>`;
+
+      box.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click', () => {
+        const p = Number(b.dataset.page);
+        if (!p || p < 1 || p > model.pages || p === model.page) return;
+        model.page = p;
+        loadCouriers({ keepScroll: true });
+      }));
+      box.querySelector('#pageSize')?.addEventListener('change', (e) => {
+        model.pageSize = Number(e.target.value) || 24;
+        model.page = 1;
+        loadCouriers({ keepScroll: true });
       });
     }
 
-    function applySort(list) {
-      const mode = qs('#sortBy').value;
-      if (!mode) return list; // newest first (API order)
-      const sorted = [...list];
-      switch (mode) {
-        case 'name-asc':    sorted.sort((a, b) => a.fullName.localeCompare(b.fullName, 'ar')); break;
-        case 'name-desc':   sorted.sort((a, b) => b.fullName.localeCompare(a.fullName, 'ar')); break;
-        case 'license-asc': sorted.sort((a, b) => String(a.licenseEnd).localeCompare(String(b.licenseEnd))); break;
-        case 'status':      sorted.sort((a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status)); break;
-        case 'branch':      sorted.sort((a, b) => a.branch.localeCompare(b.branch) || a.fullName.localeCompare(b.fullName, 'ar')); break;
-      }
-      return sorted;
-    }
+    /* ------------------------- Kanban pipeline ------------------------- */
 
-    /* ------------------------- Courier compact cards ------------------------- */
-
-    /** License date line + expiry warning badge (used in cards & profiles). */
-    const licenseCell = (r) => {
-      let badge = '';
-      if (isExpired(r)) {
-        badge = `<span class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 ring-1 ring-red-500/20">⚠ Expired</span>`;
-      } else if (isExpiringSoon(r)) {
-        badge = `<span class="mt-1 animate-pulse inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-500/20">Expiring in ${Math.max(daysUntil(r.licenseEnd), 0)}d</span>`;
-      }
-      return `<p class="num text-xs font-semibold text-slate-700 whitespace-nowrap">${fmtDate(r.licenseStart)} → ${fmtDate(r.licenseEnd)}</p>${badge}`;
-    };
-
-    function renderCards() {
-      const list = applySort(getFiltered());
-      const nameFont = s => isArabic(s) ? 'font-arabic' : '';
-      const bar = (s) => STATUS_TONE[s]?.bar ?? '#94A3B8';
-
-      qs('#cardsGrid').innerHTML = list.map((r, i) => `
-        <article onclick="openProfile('${r.id}')" tabindex="0" onkeydown="if(event.key==='Enter')openProfile('${r.id}')"
-          title="Open ${escAttr(r.fullName)} profile"
-          class="compact-card rounded-2xl row-anim" style="animation-delay:${Math.min(i * 32, 420)}ms">
-          <span class="accent-bar" style="background:${bar(r.status)}"></span>
-          <div class="flex items-center gap-3 p-3 pl-4">
-            <!-- Personal photo (or initials) -->
-            ${r.photo
-              ? `<img src="/api/documents/${r.photo}" alt="" loading="lazy" class="avatar w-11 h-11 rounded-xl object-cover shrink-0 ring-2 ring-slate-100" />`
-              : `<div class="avatar w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white grid place-items-center text-sm font-bold shrink-0 shadow-sm">${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}</div>`}
-            <!-- Identity -->
+    function kanbanCard(r) {
+      const nameFont = isArabic(r.fullName) ? 'font-arabic' : '';
+      const thumb = r.photo ? `<img src="/api/documents/${r.photo}${r.thumbPhoto ? '?thumb=1' : ''}" alt="" loading="lazy" class="w-7 h-7 rounded-lg object-cover shrink-0" />` : '';
+      return `
+        <article class="kanban-card" draggable="true" data-id="${r.id}" onclick="openProfile('${r.id}')">
+          <div class="flex items-center gap-2">
+            ${thumb}
             <div class="min-w-0 flex-1">
-              <div class="flex items-start gap-2 min-w-0">
-                <h3 class="font-bold text-[13.5px] text-ink leading-tight line-clamp-2 min-w-0 ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</h3>
-                <span class="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ring-1 shrink-0 mt-0.5 ${STATUS_META[r.status]?.badge ?? ''}" dir="ltr">
-                  <span class="w-1.5 h-1.5 rounded-full ${STATUS_META[r.status]?.dot ?? 'bg-slate-400'}"></span>${esc(r.status)}
-                </span>
-              </div>
-              <p class="num text-[11px] text-slate-400 mt-1 copyable w-fit" dir="ltr" title="Click to copy national ID"
-                 onclick="copyText('${escAttr(r.nationalId)}', 'National ID'); event.stopPropagation()">${esc(r.nationalId)}
-                <svg class="copy-ico inline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:.7rem;height:.7rem;vertical-align:-1px"><path stroke-linecap="round" stroke-linejoin="round" d="M8 8V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3m-11 0V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1Z"/></svg>
-              </p>
-              <div class="flex items-center gap-1.5 mt-1.5">
-                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 ring-1 ring-slate-900/5">QCD<span class="num">${esc(r.branch.slice(-1))}</span></span>
-                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ring-1 ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>
-              </div>
-            </div>
-            <!-- Quick actions (don't trigger the profile click) -->
-            <div class="flex items-center gap-0.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
-              <button type="button" onclick='openModal("${r.id}")' title="Edit courier" aria-label="Edit courier"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 active:scale-90 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
-              </button>
-              <button type="button" onclick="askDelete('${r.id}')" title="Delete courier" aria-label="Delete courier"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 active:scale-90 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
-              </button>
+              <p class="kn truncate ${nameFont}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</p>
+              <p class="km" dir="ltr">${esc(r.nationalId)}</p>
             </div>
           </div>
-        </article>
-      `).join('');
-
-      qs('#emptyState').classList.toggle('hidden', list.length !== 0);
-      qs('#resultCount').textContent = `${list.length} of ${state.length} record${state.length === 1 ? '' : 's'} shown`;
-      qs('#navCount').textContent = String(state.length);
-      qs('#activeSortLabel').textContent = qs('#sortBy').selectedOptions[0].textContent;
-      renderChips();
+          <div class="kf">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">QCD${esc(r.branch.slice(-1))}</span>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700' : 'bg-cyan-50 text-cyan-700'}">${esc(r.employmentType)}</span>
+            ${r.timeToHireDays != null ? `<span class="text-[10px] font-semibold text-slate-400">⏱ ${r.timeToHireDays}d</span>` : ''}
+          </div>
+        </article>`;
     }
+
+    function renderKanban() {
+      const byStatus = (s) => model.all.filter(r => r.status === s);
+      qs('#kanbanBoard').innerHTML = STATUSES.map(s => {
+        const rows = byStatus(s);
+        return `
+        <section class="kanban-col" data-status="${escAttr(s)}">
+          <header class="kanban-col-h">
+            <span class="dot" style="background:${STATUS_TONE[s].bar}"></span>
+            <b>${esc(s)}</b>
+            <span class="n">${rows.length}</span>
+          </header>
+          <div class="kanban-list" data-drop="${escAttr(s)}">
+            ${rows.length ? rows.map(kanbanCard).join('') : '<div class="kanban-empty">Drop couriers here</div>'}
+          </div>
+        </section>`;
+      }).join('');
+
+      wireKanbanDnD();
+      qs('#emptyState').classList.add('hidden');
+    }
+
+    function wireKanbanDnD() {
+      const board = qs('#kanbanBoard');
+      let dragged = null;
+
+      board.querySelectorAll('.kanban-card').forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+          dragged = card;
+          card.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', card.dataset.id); } catch { /* Safari */ }
+        });
+        card.addEventListener('dragend', () => {
+          card.classList.remove('dragging');
+          board.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('over'));
+          dragged = null;
+        });
+      });
+
+      board.querySelectorAll('.kanban-col').forEach(col => {
+        const list = col.querySelector('.kanban-list');
+        const status = col.dataset.status;
+
+        col.addEventListener('dragover', (e) => {
+          if (!dragged) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          col.classList.add('over');
+        });
+        col.addEventListener('dragleave', (e) => {
+          if (!col.contains(e.relatedTarget)) col.classList.remove('over');
+        });
+        col.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          col.classList.remove('over');
+          if (!dragged) return;
+          const id = dragged.dataset.id;
+          const from = dragged.closest('.kanban-col')?.dataset.status;
+          if (!id || from === status) return;
+          await moveToStatus(id, status);
+        });
+        list?.addEventListener('click', () => { /* clicks bubble to the card */ });
+      });
+    }
+
+    async function moveToStatus(id, status) {
+      const row = model.all.find(r => r.id === id) || model.items.find(r => r.id === id);
+      if (!row) return;
+      const prev = row.status;
+      row.status = status;                    // optimistic
+      renderKanban();
+      renderSummary();
+      try {
+        const updated = await api(`/couriers/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+        Object.assign(row, updated);
+        toast(`${row.fullName} → ${status}`, 'success');
+        loadMetrics().then(() => { renderSummary(); renderInsights(); renderMeta(); });
+      } catch (err) {
+        row.status = prev;                    // rollback
+        renderKanban();
+        toast(err.message || 'Could not move the courier.', 'error');
+      }
+    }
+
+    /* ------------------------- Filter chips ------------------------- */
 
     /** Active filter chips with one-click removal. */
     function renderChips() {
       const chips = [];
       const q = qs('#searchInput').value.trim();
       if (q) chips.push({ label: `“${q}”`, clear: () => { qs('#searchInput').value = ''; } });
-      if (cardFilter.status) chips.push({ label: cardFilter.status, clear: () => { cardFilter.status = null; qs('#filterStatus').value = ''; renderSummary(); } });
+      if (cardFilter.status) chips.push({ label: cardFilter.status, clear: () => { cardFilter.status = null; qs('#filterStatus').value = ''; } });
       if (qs('#filterBranch').value) chips.push({ label: qs('#filterBranch').value, clear: () => { qs('#filterBranch').value = ''; } });
       if (qs('#filterType').value) chips.push({ label: qs('#filterType').value, clear: () => { qs('#filterType').value = ''; } });
 
@@ -974,11 +1211,81 @@
       box.querySelectorAll('[data-chip]').forEach(btn => {
         btn.addEventListener('click', () => {
           chips[+btn.dataset.chip].clear();
+          model.page = 1;
           renderSummary();
-          renderCards();
+          loadCouriers({ keepScroll: true });
         });
       });
     }
+    /* ------------------------- Courier compact cards ------------------------- */
+
+    /** License date line + expiry warning badge (used in cards & profiles). */
+    const licenseCell = (r) => {
+      let badge = '';
+      if (isExpired(r)) {
+        badge = `<span class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 ring-1 ring-red-500/20">⚠ Expired</span>`;
+      } else if (isExpiringSoon(r)) {
+        badge = `<span class="mt-1 animate-pulse inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-500/20">Expiring in ${Math.max(daysUntil(r.licenseEnd), 0)}d</span>`;
+      }
+      return `<p class="num text-xs font-semibold text-slate-700 whitespace-nowrap">${fmtDate(r.licenseStart)} → ${fmtDate(r.licenseEnd)}</p>${badge}`;
+    };
+
+    /** Find a courier in whatever collection is currently loaded (page / board / cache). */
+    const findRow = (id) => state.find(x => x.id === id) || model.all.find(x => x.id === id) || model.items.find(x => x.id === id) || null;
+
+    /** Thumbnail URL for a stored document (falls back to the full image). */
+    const docUrl = (r, thumb = true) =>
+      r.photo ? `/api/documents/${r.photo}${thumb && r.thumbPhoto ? '?thumb=1' : ''}` : null;
+
+    /** Card list (one page of results). */
+    function renderCards() {
+      const list = model.items;
+      const nameFont = s => isArabic(s) ? 'font-arabic' : '';
+      const bar = (s) => STATUS_TONE[s]?.bar ?? '#94A3B8';
+
+      qs('#cardsGrid').innerHTML = list.map((r, i) => `
+        <article onclick="openProfile('${r.id}')" tabindex="0" onkeydown="if(event.key==='Enter')openProfile('${r.id}')"
+          title="Open ${escAttr(r.fullName)} profile"
+          class="compact-card rounded-2xl row-anim" style="animation-delay:${Math.min(i * 32, 420)}ms">
+          <span class="accent-bar" style="background:${bar(r.status)}"></span>
+          <div class="flex items-center gap-3 p-3 pl-4">
+            ${r.photo
+              ? `<img src="${docUrl(r)}" alt="" loading="lazy" class="avatar w-11 h-11 rounded-xl object-cover shrink-0 ring-2 ring-slate-100" />`
+              : `<div class="avatar w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white grid place-items-center text-sm font-bold shrink-0 shadow-sm">${esc((r.fullName.trim().charAt(0) || '?').toUpperCase())}</div>`}
+            <div class="min-w-0 flex-1">
+              <div class="flex items-start gap-2 min-w-0">
+                <h3 class="font-bold text-[13.5px] text-ink leading-tight line-clamp-2 min-w-0 ${nameFont(r.fullName)}" title="${escAttr(r.fullName)}">${esc(r.fullName)}</h3>
+                <span class="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ring-1 shrink-0 mt-0.5 ${STATUS_META[r.status]?.badge ?? ''}" dir="ltr">
+                  <span class="w-1.5 h-1.5 rounded-full ${STATUS_META[r.status]?.dot ?? 'bg-slate-400'}"></span>${esc(r.status)}
+                </span>
+              </div>
+              <p class="num text-[11px] text-slate-400 mt-1 copyable w-fit" dir="ltr" title="Click to copy national ID"
+                 onclick="copyText('${escAttr(r.nationalId)}', 'National ID'); event.stopPropagation()">${esc(r.nationalId)}
+                <svg class="copy-ico inline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:.7rem;height:.7rem;vertical-align:-1px"><path stroke-linecap="round" stroke-linejoin="round" d="M8 8V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3m-11 0V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1Z"/></svg>
+              </p>
+              <div class="flex items-center gap-1.5 mt-1.5">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 ring-1 ring-slate-900/5">QCD<span class="num">${esc(r.branch.slice(-1))}</span></span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ring-1 ${r.employmentType === 'Full Time' ? 'bg-violet-50 text-violet-700 ring-violet-600/20' : 'bg-cyan-50 text-cyan-700 ring-cyan-600/20'}">${esc(r.employmentType)}</span>
+                ${r.timeToHireDays != null ? `<span class="text-[10px] font-semibold text-slate-400" title="Time to hire">⏱ ${r.timeToHireDays}d</span>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-0.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
+              <button type="button" onclick='openModal("${r.id}")' title="Edit courier" aria-label="Edit courier"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 active:scale-90 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m16.9 4.1 3 3L8 19l-4 1 1-4L16.9 4.1Z"/></svg>
+              </button>
+              <button type="button" onclick="askDelete('${r.id}')" title="Delete courier" aria-label="Delete courier"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 active:scale-90 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
+              </button>
+            </div>
+          </div>
+        </article>
+      `).join('');
+
+      qs('#emptyState').classList.toggle('hidden', list.length !== 0);
+    }
+
 
     /* ------------------------- Courier profile (full details + documents) ------------------------- */
 
@@ -1018,7 +1325,7 @@
 
     /** Big avatar for the profile header (photo or initials). */
     const profileAvatar = (c, classes) => c.photo
-      ? `<img src="/api/documents/${c.photo}" alt="" class="${classes} object-cover" loading="lazy" />`
+      ? `<img src="/api/documents/${c.photo}${c.thumbPhoto ? '?thumb=1' : ''}" alt="" class="${classes} object-cover" loading="lazy" />`
       : `<div class="${classes} bg-white/20 text-white grid place-items-center font-bold ring-1 ring-white/30">${esc((c.fullName.trim().charAt(0) || '?').toUpperCase())}</div>`;
 
     function profileMarkup(c) {
@@ -1039,20 +1346,40 @@
         ['Outlook', c.outlook ? copyVal(c.outlook, 'Outlook account', 'text-sm text-slate-600') : '<span class="text-sm text-slate-300">—</span>'],
         ['Plate No.', `<span class="num text-sm font-semibold text-slate-700" dir="ltr">${esc(c.plate) || '—'}</span>`],
         ['P. License', licenseCell(c)],
+        ['Time to hire', c.timeToHireDays != null
+          ? `<span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 ring-1 ring-emerald-600/20 px-2 py-0.5 rounded-full">⏱ ${c.timeToHireDays} day${c.timeToHireDays === 1 ? '' : 's'}</span>`
+          : '<span class="text-sm text-slate-300">—</span>'],
         ['Record', `<span class="text-xs text-slate-400" dir="ltr">Updated ${fmtDate(String(c.updatedAt || '').slice(0, 10))}</span>`]
       ];
+
+      const EV_LABEL = {
+        created: 'Record created', updated: 'Details updated', status: 'Status changed',
+        document: 'Document uploaded'
+      };
+      const events = (c.events || []).slice(0, 6).map(ev => {
+        const when = new Date(String(ev.createdAt).replace(' ', 'T') + 'Z');
+        const stamp = isNaN(when) ? '' : when.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        const what = ev.type === 'status' && ev.toStatus
+          ? `Status → <b>${esc(ev.toStatus)}</b>`
+          : esc(EV_LABEL[ev.type] || ev.type);
+        return `<li class="flex items-center gap-2 text-[11px]">
+          <span class="w-1.5 h-1.5 rounded-full ${ev.type === 'status' ? 'bg-brand-500' : 'bg-slate-300'} shrink-0"></span>
+          <span class="text-slate-500 truncate">${what}</span>
+          <span class="ms-auto text-[10px] text-slate-400 num shrink-0">${stamp}</span>
+        </li>`;
+      }).join('');
 
       const slots = DOC_KINDS.map((k, idx) => {
         const doc = (c.documents || []).find(d => d.kind === k.kind) || null;
         return `
         <div class="doc-anim doc-slot group relative rounded-2xl border-2 ${doc ? 'border-brand-200 bg-brand-50/40' : 'border-dashed border-slate-200 bg-surface/60'} hover:border-brand-400 hover:shadow-pop transition-all duration-300 p-2.5 flex flex-col"
-             style="animation-delay:${idx * 55}ms">
+             data-kind="${k.kind}" style="animation-delay:${idx * 55}ms">
           <div class="flex items-center justify-between mb-2 px-0.5">
             <p class="text-[9.5px] font-extrabold uppercase leading-tight tracking-wide text-slate-500">${k.label}</p>
           </div>
           <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-white ring-1 ring-slate-200/80 mb-2 shadow-inner">
             ${doc
-              ? `<img src="/api/documents/${doc.id}" class="absolute inset-0 w-full h-full object-cover cursor-zoom-in group-hover:scale-[1.06] transition-transform duration-500" loading="lazy" onclick="window.open('/api/documents/${doc.id}','_blank')" alt="${escAttr(k.label)}" />
+              ? `<img src="/api/documents/${doc.id}${doc.hasThumb ? '?thumb=1' : ''}" class="absolute inset-0 w-full h-full object-cover cursor-zoom-in group-hover:scale-[1.06] transition-transform duration-500" loading="lazy" onclick="window.open('/api/documents/${doc.id}','_blank')" alt="${escAttr(k.label)}" />
                  <span class="absolute bottom-1 right-1 text-[9px] font-bold text-white num bg-slate-900/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md">${fmtSize(doc.size)}</span>
                  <div class="absolute inset-0 bg-gradient-to-t from-brand-900/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
                  <a href="/api/documents/${doc.id}" target="_blank" title="View full size"
@@ -1071,6 +1398,10 @@
               class="p-1.5 rounded-lg text-brand-600 bg-brand-50 ring-1 ring-brand-200/80 hover:bg-brand-100 hover:shadow-sm active:scale-90 transition-all">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20V8m0 0-4 4m4-4 4 4M4 4h16"/></svg>
             </button>
+            <button type="button" onclick="qs('#doc-cam-${k.kind}').click()" title="Take a photo"
+              class="p-1.5 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-violet-50 active:scale-90 transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8a2 2 0 0 1 2-2h1.5l1.2-1.6A1 1 0 0 1 9.5 4h5a1 1 0 0 1 .8.4L16.5 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z"/><circle cx="12" cy="12.5" r="3.2"/></svg>
+            </button>
             ${doc ? `
               <a href="/api/documents/${doc.id}" target="_blank" title="View full size"
                 class="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 active:scale-90 transition-all">
@@ -1085,7 +1416,10 @@
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13h8l1-13"/></svg>
               </button>` : ''}
           </div>
+          <div class="doc-busy hidden"><span class="spin"></span></div>
           <input type="file" id="doc-file-${k.kind}" accept="image/jpeg,image/png,image/webp" class="hidden"
+            onchange="uploadDoc('${k.kind}', this)" />
+          <input type="file" id="doc-cam-${k.kind}" accept="image/*" capture="environment" class="hidden"
             onchange="uploadDoc('${k.kind}', this)" />
         </div>`;
       }).join('');
@@ -1123,6 +1457,11 @@
           ${info.map(([label, content]) => `
             <div class="min-w-0"><p class="field-label">${label}</p><div class="break-words">${content}</div></div>`).join('')}
         </div>
+        ${events ? `
+        <!-- Activity (pipeline history) -->
+        <div class="px-5 sm:px-6 pb-4">
+          <ul class="rounded-xl bg-slate-50/80 ring-1 ring-slate-100 px-3 py-2.5 space-y-1.5">${events}</ul>
+        </div>` : ''}
         <!-- Documents -->
         <div class="px-6 pb-6 pt-4 border-t border-slate-100">
           <div class="flex items-center justify-between mb-3">
@@ -1136,26 +1475,124 @@
         </div>`;
     }
 
-    /** Upload (or replace) an image into a document slot. */
-    async function uploadDoc(kind, inputEl) {
-      const file = inputEl.files?.[0];
-      inputEl.value = ''; // allow re-picking the same file
+    /* ---------------- Image pipeline: compress + thumbnail ---------------- */
+
+    /** Decode a File into something drawable (ImageBitmap, with <img> fallback). */
+    async function decodeImage(file) {
+      try { return await createImageBitmap(file); }
+      catch {
+        const url = URL.createObjectURL(file);
+        try {
+          const img = new Image();
+          img.src = url;
+          await (img.decode ? img.decode() : new Promise((res, rej) => { img.onload = res; img.onerror = rej; }));
+          return img;
+        } finally {
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+      }
+    }
+
+    /** Decode → downscale → JPEG. Returns { full, thumb } as Blobs. */
+    async function compressImage(file, { maxDim = 1600, quality = 0.82, thumbDim = 480, thumbQuality = 0.72 } = {}) {
+      if (!/^image\//.test(file.type)) throw new Error('Please choose an image file (JPG, PNG or WEBP).');
+      let bmp;
+      try { bmp = await decodeImage(file); }
+      catch { throw new Error('This image could not be read. Try another file.'); }
+
+      const draw = (limit, q) => new Promise((resolve, reject) => {
+        const scale = Math.min(1, limit / Math.max(bmp.width, bmp.height));
+        const w = Math.max(1, Math.round(bmp.width * scale));
+        const h = Math.max(1, Math.round(bmp.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(bmp, 0, 0, w, h);
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compression failed.')), 'image/jpeg', q);
+      });
+
+      const [full, thumb] = await Promise.all([draw(maxDim, quality), draw(thumbDim, thumbQuality)]);
+      return { full, thumb, width: bmp.width, height: bmp.height };
+    }
+
+    /** Upload a File into a document slot (used by picker, camera, drop and paste). */
+    async function uploadFileToSlot(kind, file) {
       if (!file || !profileCourier) return;
+      if (!/^image\//.test(file.type)) return toast('Only images are allowed (JPG, PNG, WEBP).', 'error');
+      if (file.size > 25 * 1024 * 1024) return toast('Image is too large (max 25MB before compression).', 'error');
+
+      const slot = document.querySelector(`.doc-slot[data-kind="${kind}"]`);
+      const busy = slot?.querySelector('.doc-busy');
+      busy?.classList.remove('hidden');
+
       try {
+        const { full, thumb } = await compressImage(file);
+        if (full.size > 5 * 1024 * 1024) throw new Error('Image is still larger than 5MB after compression.');
+
         const fd = new FormData();
         fd.append('kind', kind);
-        fd.append('file', file);
+        fd.append('file', full, `${kind}.jpg`);
+        fd.append('thumb', thumb, `${kind}-thumb.jpg`);
+
         const res = await fetch(`/api/couriers/${profileCourier.id}/documents`, { method: 'POST', body: fd });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw { message: body.error || `Upload failed (${res.status})` };
-        toast(kind === 'photo' ? 'Personal photo uploaded.' : 'Document uploaded.', 'success');
-        await refreshProfile(); // re-render profile with the new image
-        state = state.map(r => r.id === profileCourier.id ? { ...r, photo: kind === 'photo' ? body.id : r.photo } : r);
-        rerender(); // cards instantly show the new personal photo
+
+        const saved = Math.max(1, Math.round((1 - full.size / file.size) * 100));
+        toast(kind === 'photo' ? 'Personal photo uploaded.' : `Document uploaded (${saved}% smaller).`, 'success');
+        await refreshProfile();
+        await reload();          // cards + counts + thumbnails stay in sync
       } catch (err) {
         toast(err.message || 'Upload failed.', 'error');
+      } finally {
+        busy?.classList.add('hidden');
       }
     }
+
+    /** File picker / camera input handler. */
+    async function uploadDoc(kind, inputEl) {
+      const file = inputEl.files?.[0];
+      inputEl.value = ''; // allow re-picking the same file
+      await uploadFileToSlot(kind, file);
+    }
+
+    /* Drag & drop + paste on document slots (delegated, survives re-renders) */
+    let lastSlotKind = 'photo';
+    document.addEventListener('mouseover', (e) => {
+      const slot = e.target.closest?.('.doc-slot[data-kind]');
+      if (slot) lastSlotKind = slot.dataset.kind;
+    });
+    document.addEventListener('dragover', (e) => {
+      const slot = e.target.closest?.('.doc-slot[data-kind]');
+      if (!slot || !profileCourier) return;
+      e.preventDefault();
+      slot.classList.add('dragover');
+    });
+    document.addEventListener('dragleave', (e) => {
+      const slot = e.target.closest?.('.doc-slot[data-kind]');
+      slot?.classList.remove('dragover');
+    });
+    document.addEventListener('drop', (e) => {
+      const slot = e.target.closest?.('.doc-slot[data-kind]');
+      if (!slot || !profileCourier) return;
+      e.preventDefault();
+      slot.classList.remove('dragover');
+      const file = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('image/'));
+      if (file) uploadFileToSlot(slot.dataset.kind, file);
+    });
+    document.addEventListener('paste', (e) => {
+      if (!profileCourier) return;
+      const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+      if (!item) return;
+      const file = item.getAsFile();
+      if (file) {
+        e.preventDefault();
+        uploadFileToSlot(lastSlotKind, file);
+        toast(`Pasted into ${lastSlotKind.replace('_', ' ')}…`, 'info');
+      }
+    });
 
     /* Delete doc ask/confirm (reuses the delete modal pattern) */
     let deleteDocTarget = null;
@@ -1174,19 +1611,15 @@
       qs('#deleteOverlay').querySelector('h3').textContent = 'Delete courier record?';
       try {
         await api(`/documents/${id}`, { method: 'DELETE' });
-        const kind = (profileCourier?.documents || []).find(d => d.id === id)?.kind;
-        if (kind === 'photo') {
-          state = state.map(r => r.id === profileCourier.id ? { ...r, photo: null } : r);
-          rerender();
-        }
         await refreshProfile();
+        await reload();
         toast('Document deleted.', 'success');
       } catch (err) {
         toast(err.message || 'Delete failed.', 'error');
       }
     }
 
-    const rerender = () => { renderSummary(); renderCards(); };
+    const rerender = () => renderAll();
 
     /* ------------------------- Shell: sidebar / nav / shortcuts ------------------------- */
 
@@ -1221,14 +1654,35 @@
       if (e.key === 'Escape' && qs('#sidebar').classList.contains('open')) closeSidebar();
     });
 
+    /* ------------------------- View toggle (list / pipeline) ------------------------- */
+
+    function setView(view) {
+      model.view = view === 'kanban' ? 'kanban' : 'cards';
+      model.page = 1;
+      qs('#viewToggle').querySelectorAll('button').forEach(b => {
+        const on = b.dataset.view === model.view;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      try { localStorage.setItem('bankai-hiring-view', model.view); } catch { /* private mode */ }
+      loadCouriers({ keepScroll: true });
+    }
+
+    qs('#viewToggle').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-view]');
+      if (b && b.dataset.view !== model.view) setView(b.dataset.view);
+    });
+
     /* ------------------------- Search / filters / sort wiring ------------------------- */
 
-    qs('#searchInput').addEventListener('input', renderCards);
+    const reloadFromFilters = () => { model.page = 1; loadCouriers({ keepScroll: true }); };
+
+    qs('#searchInput').addEventListener('input', debounce(reloadFromFilters, 280));
     ['filterBranch', 'filterType', 'filterStatus', 'sortBy'].forEach(id =>
       qs('#' + id).addEventListener('change', e => {
-        if (id === 'filterStatus') cardFilter.status = e.target.value || null; // keep card highlight in sync
+        if (id === 'filterStatus') cardFilter.status = e.target.value || null;
         if (id === 'filterStatus') renderSummary();
-        renderCards();
+        reloadFromFilters();
       }));
 
     function resetAllFilters() {
@@ -1236,15 +1690,22 @@
       ['filterBranch', 'filterType', 'filterStatus'].forEach(id => (qs('#' + id).value = ''));
       qs('#sortBy').value = '';
       cardFilter = { status: null };
-      rerender();
+      model.page = 1;
+      renderSummary();
+      loadCouriers({ keepScroll: true });
     }
 
     qs('#resetFilters').addEventListener('click', resetAllFilters);
 
     /* ------------------------- CSV export ------------------------- */
 
-    qs('#exportCsv').addEventListener('click', () => {
-      const rows = applySort(getFiltered());
+    qs('#exportCsv').addEventListener('click', async () => {
+      const f = currentFilters();
+      let rows;
+      try {
+        const q = new URLSearchParams({ all: '1', q: f.q, status: f.status, branch: f.branch, type: f.type, sort: f.sort });
+        rows = await api('/couriers?' + q);
+      } catch (err) { return toast(err.message || 'Export failed.', 'error'); }
       if (!rows.length) return toast('Nothing to export with the current filters.', 'error');
 
       const cols = [
@@ -1280,7 +1741,7 @@
       qs('#courierId').value = id || '';
 
       if (id) {
-        const r = state.find(x => x.id === id);
+        const r = findRow(id);
         if (!r) return toast('Record not found.', 'error');
         qs('#modalTitle').textContent = 'Edit Courier';
         fillForm(r);
@@ -1295,7 +1756,7 @@
 
     /** Duplicate a record: opens the "add" form prefilled with existing values. */
     function openCopy(id) {
-      const r = state.find(x => x.id === id);
+      const r = findRow(id);
       if (!r) return toast('Record not found.', 'error');
       qs('#courierForm').reset();
       clearFieldErrors();
@@ -1332,19 +1793,21 @@
         });
         const idx = state.findIndex(r => r.id === id);
         if (idx !== -1) state[idx] = updated;
-        rerender();
+        renderAll();
+        await loadMetrics();
+        renderSummary(); renderInsights();
         if (profileCourier && profileCourier.id === id) await refreshProfile();
         toast(`Status updated to "${status}"`, 'success');
       } catch (err) {
         toast(err.message, 'error');
-        rerender(); // restore previous selection
+        renderAll(); // restore previous selection
         if (profileCourier && profileCourier.id === id) await refreshProfile();
       }
     }
 
     function askDelete(id) {
       deleteTargetId = id;
-      const r = state.find(x => x.id === id);
+      const r = findRow(id);
       qs('#deleteMsg').textContent = r ? `"${r.fullName}" will be permanently removed from the database. This action cannot be undone.` : 'This record will be permanently removed.';
       qs('#deleteOverlay').classList.remove('hidden');
     }
@@ -1363,10 +1826,9 @@
       closeDelete();
       try {
         await api(`/couriers/${id}`, { method: 'DELETE' });
-        state = state.filter(r => r.id !== id);
         const wasOpen = profileCourier && profileCourier.id === id;
         if (wasOpen) closeProfile();
-        rerender();
+        await reload();
         toast('Courier record deleted.', 'success');
       } catch (err) {
         toast(err.message, 'error');
@@ -1403,18 +1865,15 @@
 
       try {
         if (id) {
-          const updated = await api(`/couriers/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-          const idx = state.findIndex(r => r.id === id);
-          if (idx !== -1) state[idx] = updated;
+          await api(`/couriers/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
           toast('Courier record updated.', 'success');
           if (profileCourier && profileCourier.id === id) await refreshProfile(); // keep an open profile in sync
         } else {
-          const created = await api('/couriers', { method: 'POST', body: JSON.stringify(payload) });
-          state.unshift(created);
+          await api('/couriers', { method: 'POST', body: JSON.stringify(payload) });
           toast('New courier added.', 'success');
         }
         closeModal();
-        rerender();
+        await reload();
       } catch (err) {
         if (err.errors) showFieldErrors(err.errors); // map server errors to inputs
         toast(err.message, 'error');
@@ -1537,7 +1996,22 @@
       '<option value="">All statuses</option>' +
       STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
 
-    renderSidebar(); // sidebar counters start at 0 until the data arrives
+    // Restore the last layout (list / pipeline)
+    try {
+      const saved = localStorage.getItem('bankai-hiring-view');
+      if (saved === 'kanban') {
+        model.view = 'kanban';
+        qs('#viewToggle').querySelectorAll('button').forEach(b => {
+          const on = b.dataset.view === 'kanban';
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        qs('#cardsGrid').classList.add('hidden');
+        qs('#kanbanBoard').classList.remove('hidden');
+      }
+    } catch { /* private mode */ }
+
+    renderSidebar(); // counters start at 0 until the metrics arrive
     refresh();
   </script>
 </body>
