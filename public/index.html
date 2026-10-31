@@ -2302,6 +2302,17 @@
 
     renderSidebar(); // counters start at 0 until the metrics arrive
     refresh();
+
+    /* ------------------------- Bankai platform hook -------------------------
+       When Final-Bankai runs this app embedded, it pushes live-update hints
+       here directly (window.bkRefresh, same-origin) → silently re-fetch
+       cards + counters without disturbing anything the operator is editing. */
+    window.bkRefresh = () => {
+      const busy = ['#modalOverlay', '#profileOverlay', '#importOverlay']
+        .some((id) => { const el = document.querySelector(id); return el && !el.classList.contains('hidden'); });
+      if (busy) return;
+      loadCouriers({ skeleton: false, keepScroll: true });
+    };
   </script>
 </body>
 </html>
