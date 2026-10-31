@@ -189,6 +189,34 @@ try {
   const secondPage = await page.locator('#cardsGrid article').count();
   check('page 2 loads its own rows', secondPage >= 1 && secondPage <= 2, `${firstPage} → ${secondPage}`);
 
+  /* ---------------------------------------------------------- bulk import */
+  const importCsv = join(TMP, 'import.csv');
+  const importNid = String(26000000000000 + Math.floor(Math.random() * 999999));
+  writeFileSync(importCsv,
+    'الاسم,الموبايل,الرقم القومي,الفرع,نوع التوظيف,بداية الرخصة,انتهاء الرخصة,الحالة\n' +
+    `مستورد آلي,01012349999,${importNid},QCD1,Full Time,2024-05-01,2027-05-01,نشط\n`, 'utf8');
+
+  await page.evaluate(() => openImport());
+  await page.waitForSelector('#importOverlay:not(.hidden)', { timeout: 10000 });
+  await page.setInputFiles('#importFile', importCsv);
+  await page.waitForSelector('#importRows tr', { timeout: 15000 });
+
+  check('import maps the Arabic columns', (await page.locator('#importMapping select').count()) === 10);
+  check('import preview marks the row ready', /1 ready/.test(await page.locator('#importSummary').innerText()));
+  check('import normalises Arabic status/type', /Active/.test(await page.locator('#importRows').innerText()));
+
+  await page.click('#importCommit');
+  await page.waitForSelector('#importStep3:not(.hidden)', { timeout: 20000 });
+  check('import writes the row', /1 created/.test(await page.locator('#importStep3').innerText()));
+  await page.click('#importStep3 button');
+  await page.waitForTimeout(1200);
+
+  const found = await page.evaluate(async (nid) => {
+    const rows = await api('/couriers?all=1&q=' + encodeURIComponent(nid));
+    return rows.map(r => r.fullName);
+  }, importNid);
+  check('imported courier is searchable', found.includes('مستورد آلي'), found.join(', '));
+
   check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
 
   await browser.close();

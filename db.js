@@ -226,6 +226,16 @@ export const db = {
     return row ? ROW.fromServer(row) : null;
   },
 
+  /** Every national ID already stored — used by the bulk importer. */
+  nationalIds() {
+    return new Set(sqlite.prepare('SELECT national_id FROM couriers').all().map((r) => r.national_id));
+  },
+
+  findByNationalId(nationalId) {
+    const row = sqlite.prepare(`${SELECT_WITH_PHOTO} WHERE c.national_id = ?`).get(nationalId);
+    return row ? ROW.fromServer(row) : null;
+  },
+
   create(d) {
     const r = ROW.fromClient(d);
     r.search_text = searchTextOf(d);

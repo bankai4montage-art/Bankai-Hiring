@@ -299,10 +299,10 @@
   <div class="blob blob-2"></div>
   <div class="blob blob-3"></div>
 
-  <!-- Mobile drawer backdrop -->
-  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeSidebar()"></div>
-
   <div class="app-shell">
+
+    <!-- Mobile drawer backdrop (inside the shell so the drawer sits above it) -->
+    <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeSidebar()"></div>
 
     <!-- ============================= SIDEBAR ============================= -->
     <aside id="sidebar" class="app-sidebar" aria-label="Main navigation">
@@ -336,6 +336,10 @@
         <button type="button" class="side-link" onclick="navTo(this,'couriers'); setTimeout(()=>qs('#exportCsv').click(), 380)">
           <svg class="side-ico" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
           <span>Export report</span>
+        </button>
+        <button type="button" class="side-link" onclick="closeSidebar(); openImport()">
+          <svg class="side-ico" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <span>Import couriers</span>
         </button>
       </nav>
 
@@ -381,6 +385,12 @@
           <input id="searchInput" type="search" autocomplete="off" placeholder="Search couriers…" />
           <kbd>/</kbd>
         </label>
+
+        <button type="button" onclick="openImport()" title="Import from Excel or CSV"
+          class="hidden sm:inline-flex items-center gap-2 bg-white text-slate-700 font-bold text-[13px] px-3.5 py-2.5 rounded-xl ring-1 ring-slate-200 shadow-sm hover:ring-brand-300 hover:text-brand-700 active:scale-95 transition-all shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <span>Import</span>
+        </button>
 
         <button type="button" onclick="openModal()"
           class="group inline-flex items-center gap-2 bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-[13px] px-3.5 sm:px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/25 hover:shadow-glow active:scale-95 transition-all shrink-0">
@@ -510,6 +520,17 @@
     .insight .lbl{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7C8CA3}
     .insight .val{font-size:18px;font-weight:800;color:#0F172A;line-height:1.15;font-variant-numeric:tabular-nums}
     .insight .val small{font-size:11px;font-weight:700;color:#64748B;margin-inline-start:3px}
+
+    /* ---------- v3: import drop zone ---------- */
+    .import-drop{border:1.5px dashed #CBD5E1;border-radius:16px;background:#F8FAFC;transition:border-color .18s,background .18s,box-shadow .18s}
+    .import-drop:hover{border-color:#93C5FD;background:#EFF6FF}
+    .import-drop.dragover{border-color:#2563EB;background:#EFF6FF;box-shadow:inset 0 0 0 3px rgba(37,99,235,.12)}
+    .import-map select{width:100%;font-size:11.5px;font-weight:600;color:#334155;background:#fff;border:1px solid #E2E8F0;border-radius:9px;padding:6px 8px}
+    .import-map select:focus{outline:none;border-color:#93C5FD;box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .import-map .k{display:block;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#94A3B8;margin-bottom:3px}
+    .import-map .k b{color:#EF4444}
+    .import-row-invalid{background:#FFF7F7}
+    .import-row-duplicate{background:#FFFBEB}
 
     /* ---------- v3: pagination ---------- */
     .pagination{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;padding:14px 0 4px}
@@ -648,6 +669,123 @@
     </div>
   </div>
 
+  <!-- ============================= IMPORT MODAL (Excel / CSV) ============================= -->
+  <div id="importOverlay" class="hidden fixed inset-0 z-[60]">
+    <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md" onclick="closeImport()"></div>
+    <div class="absolute inset-0 overflow-y-auto p-3 sm:p-6 grid place-items-center">
+      <div class="pop-in relative w-full max-w-5xl bg-white rounded-3xl shadow-2xl shadow-brand-900/25 overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+        <div class="nav-gradient flex items-start justify-between gap-4 px-5 sm:px-6 py-5">
+          <div>
+            <h2 id="importTitle" class="text-white font-bold text-lg">Import couriers</h2>
+            <p id="importSub" class="text-blue-100/80 text-xs mt-0.5">Excel (.xlsx) or CSV — no manual typing. Duplicates are detected for you.</p>
+          </div>
+          <button type="button" onclick="closeImport()" aria-label="Close"
+            class="text-blue-100 hover:text-white p-2 rounded-xl hover:bg-white/10 active:scale-90 transition shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" d="M6 18 18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="px-5 sm:px-6 py-5 max-h-[72vh] overflow-y-auto">
+
+          <!-- STEP 1 — pick a source -->
+          <div id="importStep1">
+            <label id="importDrop" for="importFile"
+              class="import-drop group flex flex-col items-center justify-center gap-2 text-center cursor-pointer px-6 py-9">
+              <span class="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 grid place-items-center ring-1 ring-brand-100 transition group-hover:scale-105">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              </span>
+              <span class="font-bold text-slate-700 text-[13px]">Drop your Excel or CSV file here</span>
+              <span class="text-[11.5px] text-slate-500">or click to choose — .xlsx, .xlsm, .csv</span>
+            </label>
+            <input id="importFile" type="file" accept=".xlsx,.xlsm,.csv,.txt,.tsv" class="hidden" />
+
+            <div class="grid sm:grid-cols-2 gap-3 mt-4">
+              <div>
+                <label for="importPaste" class="label">Or paste rows from your sheet</label>
+                <textarea id="importPaste" rows="6" dir="auto" spellcheck="false"
+                  class="field font-mono text-[11px] leading-relaxed"
+                  placeholder="Select the cells in Excel / Google Sheets, copy, then paste here"></textarea>
+                <button type="button" id="importPasteBtn"
+                  class="mt-2 inline-flex items-center gap-1.5 text-[12px] font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition active:scale-95">
+                  Preview pasted rows
+                </button>
+              </div>
+              <div class="rounded-xl bg-slate-50 ring-1 ring-slate-200/70 p-4">
+                <p class="text-[12px] font-bold text-slate-700 mb-2">What the sheet should contain</p>
+                <ul class="text-[11.5px] text-slate-600 space-y-1.5 leading-relaxed">
+                  <li><b class="text-slate-700">Required:</b> name, phone, national ID, license start, license end</li>
+                  <li><b class="text-slate-700">Optional:</b> branch, employment type, status, outlook, plate</li>
+                  <li>Arabic or English headers both work — you'll confirm the column mapping next.</li>
+                  <li>Existing National IDs are skipped, never duplicated.</li>
+                </ul>
+                <button type="button" id="importTemplate"
+                  class="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-bold text-slate-600 hover:text-brand-700 underline underline-offset-2 transition">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+                  Download a blank CSV template
+                </button>
+              </div>
+            </div>
+
+            <p id="importError" class="hidden mt-3 text-[12px] font-semibold text-red-600 bg-red-50 ring-1 ring-red-100 rounded-xl px-3 py-2"></p>
+          </div>
+
+          <!-- STEP 2 — mapping + preview -->
+          <div id="importStep2" class="hidden">
+            <div class="flex items-center gap-3 mb-3">
+              <button type="button" id="importBack"
+                class="inline-flex items-center gap-1.5 text-[12px] font-bold text-slate-600 hover:text-brand-700 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition active:scale-95">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></svg>
+                Back
+              </button>
+              <p id="importSource" class="text-[12px] font-semibold text-slate-500 truncate"></p>
+            </div>
+
+            <div id="importSummary" class="flex flex-wrap items-center gap-2 mb-4"></div>
+
+            <div class="rounded-xl ring-1 ring-slate-200/80 p-3 mb-4">
+              <p class="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-2">Column mapping</p>
+              <div id="importMapping" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5"></div>
+              <p class="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mt-3 mb-2">Defaults for empty cells <span class="normal-case tracking-normal font-semibold text-slate-400">(optional)</span></p>
+              <div id="importDefaults" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5"></div>
+            </div>
+
+            <div class="rounded-xl ring-1 ring-slate-200/80 overflow-hidden">
+              <div class="overflow-auto max-h-[34vh]">
+                <table class="w-full text-[11.5px] border-collapse">
+                  <thead class="sticky top-0 bg-slate-50 z-10">
+                    <tr id="importHead" class="text-left text-slate-500"></tr>
+                  </thead>
+                  <tbody id="importRows" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+            </div>
+            <p id="importTruncated" class="hidden mt-2 text-[11.5px] text-slate-500"></p>
+          </div>
+
+          <!-- STEP 3 — result -->
+          <div id="importStep3" class="hidden text-center py-6"></div>
+        </div>
+
+        <div id="importFooter" class="px-5 sm:px-6 py-4 border-t border-slate-100 flex flex-wrap items-center gap-3 justify-between">
+          <label id="importUpdateWrap" class="hidden inline-flex items-center gap-2 text-[12px] font-semibold text-slate-600 cursor-pointer">
+            <input id="importUpdate" type="checkbox" class="accent-brand-600 w-3.5 h-3.5" />
+            Refresh couriers that already exist (same National ID)
+          </label>
+          <span id="importFooterSpacer" class="flex-1"></span>
+          <div class="flex items-center gap-2.5">
+            <button type="button" onclick="closeImport()"
+              class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 active:scale-95 transition">Cancel</button>
+            <button type="button" id="importCommit" disabled
+              class="hidden inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-bold shadow-md hover:shadow-glow active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-md">
+              Import
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============================= DELETE CONFIRMATION MODAL ============================= -->
   <div id="deleteOverlay" class="hidden fixed inset-0 z-[55]">
     <div class="absolute inset-0 bg-brand-900/45 backdrop-blur-md" onclick="closeDelete()"></div>
@@ -721,6 +859,7 @@
     const qs = (sel) => document.querySelector(sel);
     const esc = (str) => String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const escAttr = esc;
+    const attr = escAttr;
 
     const isArabic = (str) => /[\u0600-\u06FF]/.test(str);
 
@@ -1783,6 +1922,346 @@
       if (!ok) throw new Error('execCommand copy failed');
     }
 
+    /* ------------------------- Bulk import (Excel / CSV) ------------------------- */
+
+    const IMPORT_FIELDS = [
+      { key: 'fullName', label: 'Full name', required: true },
+      { key: 'phone', label: 'Phone', required: true },
+      { key: 'nationalId', label: 'National ID', required: true },
+      { key: 'branch', label: 'Branch' },
+      { key: 'employmentType', label: 'Type' },
+      { key: 'licenseStart', label: 'License start', required: true },
+      { key: 'licenseEnd', label: 'License end', required: true },
+      { key: 'outlook', label: 'Outlook' },
+      { key: 'plate', label: 'Plate' },
+      { key: 'status', label: 'Status' }
+    ];
+
+    const IMPORT_DEFAULTS = [
+      { key: 'branch', label: 'Branch', options: ['QCD1', 'QCD2'] },
+      { key: 'employmentType', label: 'Type', options: ['Full Time', 'Part Time'] },
+      { key: 'status', label: 'Status', options: STATUSES },
+      { key: 'licenseStart', label: 'License start', type: 'date' },
+      { key: 'licenseEnd', label: 'License end', type: 'date' }
+    ];
+
+    /** Which fields the preview table shows (only the mapped ones). */
+    const IMPORT_PREVIEW_COLS = ['fullName', 'phone', 'nationalId', 'branch', 'licenseStart', 'licenseEnd', 'status'];
+
+    const importState = { file: null, text: '', headers: [], mapping: {}, defaults: {}, preview: null, busy: false };
+
+    const importChip = (label, tone = 'mute') => {
+      const tones = {
+        ok: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+        warn: 'bg-amber-50 text-amber-700 ring-amber-100',
+        bad: 'bg-red-50 text-red-700 ring-red-100',
+        info: 'bg-brand-50 text-brand-700 ring-brand-100',
+        mute: 'bg-slate-100 text-slate-600 ring-slate-200'
+      };
+      return `<span class="inline-flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-lg ring-1 ${tones[tone]}">${esc(label)}</span>`;
+    };
+
+    function openImport() {
+      importState.file = null; importState.text = '';
+      importState.headers = []; importState.mapping = {}; importState.defaults = {};
+      importState.preview = null; importState.busy = false;
+
+      qs('#importFile').value = '';
+      qs('#importPaste').value = '';
+      qs('#importError').classList.add('hidden');
+      qs('#importStep1').classList.remove('hidden');
+      qs('#importStep2').classList.add('hidden');
+      qs('#importStep3').classList.add('hidden');
+      qs('#importFooter').classList.remove('hidden');
+      qs('#importUpdate').checked = false;
+      qs('#importUpdateWrap').classList.add('hidden');
+      importCommitButton(null);
+      qs('#importOverlay').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeImport() {
+      qs('#importOverlay').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    const importError = (message) => {
+      const el = qs('#importError');
+      el.textContent = message || '';
+      el.classList.toggle('hidden', !message);
+    };
+
+    /** Label + disabled state for the commit button. */
+    function importCommitButton(preview) {
+      const btn = qs('#importCommit');
+      if (!preview) {
+        btn.classList.add('hidden');
+        btn.disabled = true;
+        btn.textContent = 'Import';
+        return;
+      }
+      const update = qs('#importUpdate').checked;
+      const count = preview.summary.ready + (update ? preview.summary.duplicates : 0);
+      btn.classList.remove('hidden');
+      btn.disabled = count === 0 || importState.busy;
+      btn.innerHTML = count
+        ? `Import ${count} courier${count === 1 ? '' : 's'}
+           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg>`
+        : 'Nothing to import';
+    }
+
+    function importFormData(extra = {}) {
+      const fd = new FormData();
+      if (importState.file) fd.append('file', importState.file);
+      else fd.append('text', importState.text);
+      fd.append('mapping', JSON.stringify(importState.mapping));
+      fd.append('defaults', JSON.stringify(importState.defaults));
+      for (const [k, v] of Object.entries(extra)) fd.append(k, String(v));
+      return fd;
+    }
+
+    async function importRequest(extra = {}) {
+      const res = await fetch('/api/couriers/import', { method: 'POST', body: importFormData(extra) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Import failed (${res.status}).`);
+      return body;
+    }
+
+    function useImportFile(file) {
+      if (!file) return;
+      if (!/\.(xlsx|xlsm|csv|txt|tsv)$/i.test(file.name)) {
+        return importError('Unsupported file type — use .xlsx, .xlsm or .csv.');
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return importError('That file is larger than 10 MB — split it into smaller files.');
+      }
+      importError('');
+      importState.file = file;
+      importState.text = '';
+      importState.mapping = {};
+      qs('#importSource').textContent = `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} KB`;
+      loadImportPreview();
+    }
+
+    function useImportPaste() {
+      const text = qs('#importPaste').value;
+      if (!text.trim()) return importError('Paste the rows from your sheet first.');
+      importError('');
+      importState.file = null;
+      importState.text = text;
+      importState.mapping = {};
+      const lines = text.split('\n').filter((l) => l.trim()).length;
+      qs('#importSource').textContent = `Pasted table · ${lines} line${lines === 1 ? '' : 's'}`;
+      loadImportPreview();
+    }
+
+    const scheduleImportPreview = debounce(() => loadImportPreview(true), 320);
+
+    async function loadImportPreview(isRefresh = false) {
+      if (importState.busy) return;
+      importState.busy = true;
+      qs('#importCommit').disabled = true;
+      qs('#importStep1').classList.add('hidden');
+      qs('#importStep2').classList.remove('hidden');
+      qs('#importFooter').classList.remove('hidden');
+      if (!isRefresh) {
+        qs('#importSummary').innerHTML = importChip('Reading the file…', 'info');
+        qs('#importMapping').innerHTML = '';
+        qs('#importDefaults').innerHTML = '';
+        qs('#importRows').innerHTML = '';
+        qs('#importHead').innerHTML = '';
+      }
+
+      try {
+        const data = await importRequest();
+        importState.headers = data.headers;
+        importState.mapping = { ...data.mapping };
+        importState.preview = data;
+        renderImportMapping();
+        renderImportDefaults();
+        renderImportPreview(data);
+      } catch (err) {
+        qs('#importStep2').classList.add('hidden');
+        qs('#importStep1').classList.remove('hidden');
+        importError(err.message);
+      } finally {
+        importState.busy = false;
+        importCommitButton(importState.preview);
+      }
+    }
+
+    function renderImportMapping() {
+      qs('#importMapping').innerHTML = IMPORT_FIELDS.map((f) => `
+        <label class="import-map block">
+          <span class="k">${esc(f.label)}${f.required ? ' <b>*</b>' : ''}</span>
+          <select data-field="${attr(f.key)}">
+            <option value="">— none —</option>
+            ${importState.headers.map((h) => `<option value="${attr(h)}" ${importState.mapping[f.key] === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}
+          </select>
+        </label>`).join('');
+
+      qs('#importMapping').querySelectorAll('select').forEach((sel) => {
+        sel.addEventListener('change', () => {
+          importState.mapping[sel.dataset.field] = sel.value;
+          scheduleImportPreview();
+        });
+      });
+    }
+
+    function renderImportDefaults() {
+      qs('#importDefaults').innerHTML = IMPORT_DEFAULTS.map((d) => `
+        <label class="import-map block">
+          <span class="k">${esc(d.label)}</span>
+          ${d.type === 'date'
+            ? `<input type="date" data-default="${attr(d.key)}" value="${attr(importState.defaults[d.key] || '')}" class="w-full text-[11.5px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-[9px] px-2 py-[5px]" />`
+            : `<select data-default="${attr(d.key)}">
+                 <option value="">— none —</option>
+                 ${d.options.map((o) => `<option value="${attr(o)}" ${importState.defaults[d.key] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+               </select>`}
+        </label>`).join('');
+
+      qs('#importDefaults').querySelectorAll('[data-default]').forEach((el) => {
+        el.addEventListener('change', () => {
+          const key = el.dataset.default;
+          if (el.value) importState.defaults[key] = el.value;
+          else delete importState.defaults[key];
+          scheduleImportPreview();
+        });
+      });
+    }
+
+    function renderImportPreview(data) {
+      const { summary, rows } = data;
+      qs('#importSummary').innerHTML = [
+        importChip(`${summary.total} row${summary.total === 1 ? '' : 's'}`, 'mute'),
+        importChip(`${summary.ready} ready`, 'ok'),
+        summary.duplicates ? importChip(`${summary.duplicates} already stored`, 'warn') : '',
+        summary.invalid ? importChip(`${summary.invalid} need a fix`, 'bad') : ''
+      ].join('');
+
+      const cols = IMPORT_PREVIEW_COLS.filter((k) => importState.mapping[k]);
+      qs('#importHead').innerHTML = `
+        <th class="px-2.5 py-2 font-bold text-[10px] uppercase tracking-wider">#</th>
+        <th class="px-2.5 py-2 font-bold text-[10px] uppercase tracking-wider">State</th>
+        ${cols.map((k) => `<th class="px-2.5 py-2 font-bold text-[10px] uppercase tracking-wider whitespace-nowrap">${esc(IMPORT_FIELDS.find((f) => f.key === k)?.label || k)}</th>`).join('')}`;
+
+      qs('#importRows').innerHTML = rows.map((r) => {
+        const errors = Object.values(r.errors || {});
+        const state = r.duplicate
+          ? importChip('Stored', 'warn')
+          : (r.ok ? importChip('Ready', 'ok') : importChip('Fix', 'bad'));
+        return `
+          <tr class="${r.duplicate ? 'import-row-duplicate' : r.ok ? '' : 'import-row-invalid'}">
+            <td class="px-2.5 py-2 text-slate-400 font-semibold num">${r.line}</td>
+            <td class="px-2.5 py-2 whitespace-nowrap">${state}</td>
+            ${cols.map((k) => {
+              const value = String(r.data?.[k] ?? '');
+              const bad = r.errors && r.errors[k];
+              return `<td class="px-2.5 py-2 ${bad ? 'text-red-600 font-semibold' : 'text-slate-600'}" ${bad ? `title="${attr(bad)}"` : ''}>${esc(value || '—')}</td>`;
+            }).join('')}
+          </tr>
+          ${errors.length ? `<tr class="import-row-invalid"><td></td><td colspan="${cols.length + 1}" class="px-2.5 pb-2 text-[11px] text-red-600 font-semibold">${esc(errors.join(' · '))}</td></tr>` : ''}`;
+      }).join('');
+
+      const truncated = qs('#importTruncated');
+      truncated.classList.toggle('hidden', !data.truncated);
+      truncated.textContent = data.truncated ? `Showing the first ${rows.length} rows — all ${summary.total} will be validated on import.` : '';
+
+      const updateWrap = qs('#importUpdateWrap');
+      const needsUpdate = summary.duplicates > 0;
+      updateWrap.classList.toggle('hidden', !needsUpdate);
+      updateWrap.classList.toggle('inline-flex', needsUpdate);
+      importCommitButton(data);
+    }
+
+    async function commitImport() {
+      if (importState.busy || !importState.preview) return;
+      importState.busy = true;
+      const btn = qs('#importCommit');
+      btn.disabled = true;
+      btn.textContent = 'Importing…';
+
+      try {
+        const res = await importRequest({ mode: 'commit', updateExisting: qs('#importUpdate').checked ? '1' : '0' });
+        showImportResult(res);
+        await reload();
+      } catch (err) {
+        importError(err.message);
+        toast(err.message, 'error');
+      } finally {
+        importState.busy = false;
+      }
+    }
+
+    function showImportResult(res) {
+      const total = res.created + res.updated;
+      qs('#importStep2').classList.add('hidden');
+      qs('#importStep1').classList.add('hidden');
+      qs('#importFooter').classList.add('hidden');
+      qs('#importStep3').classList.remove('hidden');
+      qs('#importStep3').innerHTML = `
+        <div class="w-14 h-14 rounded-2xl ${total ? 'bg-emerald-50 text-emerald-600 ring-emerald-100' : 'bg-amber-50 text-amber-600 ring-amber-100'} grid place-items-center mx-auto mb-3 ring-1">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="${total ? 'M5 13l4 4L19 7' : 'M12 9v4m0 3.5h.01M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z'}"/>
+          </svg>
+        </div>
+        <p class="font-extrabold text-slate-800 text-[15px]">${total ? 'Import finished' : 'Nothing was imported'}</p>
+        <p class="text-[12.5px] text-slate-500 mt-1">${total ? `${total} courier${total === 1 ? '' : 's'} saved to the database.` : 'No row passed validation.'}</p>
+        <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
+          ${importChip(`${res.created} created`, 'ok')}
+          ${res.updated ? importChip(`${res.updated} updated`, 'info') : ''}
+          ${res.skipped ? importChip(`${res.skipped} skipped (already stored)`, 'warn') : ''}
+          ${res.failed ? importChip(`${res.failed} failed`, 'bad') : ''}
+        </div>
+        ${res.failures?.length ? `
+          <div class="mt-4 text-left max-h-40 overflow-auto rounded-xl ring-1 ring-red-100 bg-red-50/60 p-3">
+            ${res.failures.slice(0, 8).map((f) => `
+              <p class="text-[11.5px] text-red-700 font-semibold">Line ${f.line}: ${esc(f.error || Object.values(f.errors || {}).join(' · '))}</p>`).join('')}
+            ${res.failures.length > 8 ? `<p class="text-[11px] text-red-500 mt-1">…and ${res.failures.length - 8} more</p>` : ''}
+          </div>` : ''}
+        <button type="button" onclick="closeImport()"
+          class="mt-5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-bold shadow-md hover:shadow-glow active:scale-95 transition-all">
+          Done
+        </button>`;
+    }
+
+    // File picker
+    qs('#importFile').addEventListener('change', (e) => useImportFile(e.target.files?.[0]));
+
+    // Drag & drop on the drop zone
+    (() => {
+      const drop = qs('#importDrop');
+      ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => {
+        e.preventDefault(); drop.classList.add('dragover');
+      }));
+      ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => {
+        e.preventDefault(); drop.classList.remove('dragover');
+      }));
+      drop.addEventListener('drop', (e) => useImportFile(e.dataTransfer?.files?.[0]));
+    })();
+
+    qs('#importPasteBtn').addEventListener('click', useImportPaste);
+    qs('#importBack').addEventListener('click', () => {
+      importState.file = null; importState.text = ''; importState.mapping = {};
+      importState.preview = null;
+      importError('');
+      qs('#importStep2').classList.add('hidden');
+      qs('#importStep1').classList.remove('hidden');
+      importCommitButton(null);
+    });
+    qs('#importCommit').addEventListener('click', commitImport);
+    qs('#importUpdate').addEventListener('change', () => importCommitButton(importState.preview));
+
+    qs('#importTemplate').addEventListener('click', () => {
+      const headers = 'Full Name,Phone,National ID,Branch,Employment Type,License Start,License End,Outlook,Plate,Status';
+      const blob = new Blob([`\uFEFF${headers}\r\n`], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'bankai-couriers-template.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
     /* ------------------------- Toasts & keyboard ------------------------- */
 
     function toast(message, type = 'success') {
@@ -1808,7 +2287,8 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!qs('#deleteOverlay').classList.contains('hidden')) closeDelete();
+      if (!qs('#importOverlay').classList.contains('hidden')) closeImport();
+      else if (!qs('#deleteOverlay').classList.contains('hidden')) closeDelete();
       else if (!qs('#modalOverlay').classList.contains('hidden')) closeModal();
       else if (!qs('#profileOverlay').classList.contains('hidden')) closeProfile();
     });

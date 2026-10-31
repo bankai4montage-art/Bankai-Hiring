@@ -9,6 +9,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db, docs, events, seedIfEmpty } from './db.js';
 import { storage, s3Enabled, objectKey } from './storage.js';
+import { validate, parseRecord } from './validate.js';
+import { readTable, readTableFromText, autoMap, buildRows } from './importer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -183,36 +185,103 @@ app.delete('/api/documents/:id', async (req, res) => {
 });
 
 /* ------------------------- Validation ------------------------- */
+/* Rules live in validate.js so the form and the importer agree. */
 
-// Server-side validation (mirrors the client-side rules)
-function validate(data) {
-  const e = {};
-  if (!data.fullName || data.fullName.trim().length < 3) e.fullName = 'Full name is required (min 3 chars).';
-  if (!data.phone || !/^01[0125][0-9]{8}$/.test(String(data.phone || '').trim())) e.phone = 'Phone must be a valid Egyptian mobile (11 digits).';
-  if (!data.nationalId || !/^\d{14}$/.test(String(data.nationalId || '').trim())) e.nationalId = 'National ID must be exactly 14 digits.';
-  if (!['QCD1', 'QCD2'].includes(data.branch)) e.branch = 'Branch must be QCD1 or QCD2.';
-  if (!['Full Time', 'Part Time'].includes(data.employmentType)) e.type = 'Employment type must be Full Time or Part Time.';
-  if (!data.licenseStart) e.licenseStart = 'License start date is required.';
-  if (!data.licenseEnd || (data.licenseStart && String(data.licenseEnd) < String(data.licenseStart))) e.licenseEnd = 'End date is required and must be after the start date.';
-  if (data.outlook && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.outlook).trim())) e.outlook = 'Outlook account must be a valid email.';
-  if (!['Active', 'Inactive', 'Attended to D0', 'Not Attended to D0', 'OnBoarding', 'OffBoarding'].includes(data.status)) e.status = 'Invalid courier status.';
-  return e;
-}
+/* ------------------------- Bulk import ------------------------- */
 
-function parseRecord(body) {
-  return {
-    fullName: String(body.fullName ?? '').trim(),
-    phone: String(body.phone ?? '').trim(),
-    nationalId: String(body.nationalId ?? '').trim(),
-    branch: String(body.branch ?? ''),
-    employmentType: String(body.employmentType ?? ''),
-    licenseStart: String(body.licenseStart ?? '').trim(),
-    licenseEnd: String(body.licenseEnd ?? '').trim(),
-    outlook: String(body.outlook ?? '').trim(),
-    plate: String(body.plate ?? '').trim(),
-    status: String(body.status ?? '')
-  };
-}
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 }
+});
+
+const MAX_IMPORT_ROWS = 5000;
+
+const asJson = (value) => {
+  if (value == null || value === '') return null;
+  try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return null; }
+};
+
+/**
+ * Two-phase import:
+ *   mode=dry     → parse, auto-map and validate without writing (the preview)
+ *   mode=commit  → insert every valid row; `updateExisting=1` refreshes rows
+ *                  whose National ID is already stored instead of skipping them.
+ *
+ * Body: multipart (file) or JSON/form fields with `text` for a pasted table.
+ */
+app.post('/api/couriers/import', importUpload.single('file'), async (req, res) => {
+  const body = req.body || {};
+  try {
+    const table = req.file
+      ? await readTable(req.file.buffer, req.file.originalname)
+      : readTableFromText(body.text || '');
+
+    if (table.rows.length > MAX_IMPORT_ROWS) {
+      return res.status(413).json({
+        error: `This file has ${table.rows.length} rows. Split it into files of ${MAX_IMPORT_ROWS} rows or fewer.`
+      });
+    }
+
+    const mapping = { ...autoMap(table.headers), ...(asJson(body.mapping) || {}) };
+    const defaults = asJson(body.defaults) || {};
+    const { rows, summary } = buildRows(table, mapping, defaults, db.nationalIds());
+
+    if (String(body.mode || 'dry') !== 'commit') {
+      return res.json({
+        headers: table.headers,
+        mapping,
+        summary,
+        rows: rows.slice(0, 200),
+        truncated: rows.length > 200
+      });
+    }
+
+    const replace = String(body.updateExisting || '') === '1';
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const failures = [];
+
+    for (const row of rows) {
+      if (row.duplicate) {
+        if (!replace) { skipped++; continue; }
+        const current = db.findByNationalId(row.data.nationalId);
+        if (!current) { skipped++; continue; }
+        const merged = parseRecord({ ...current, ...row.data });
+        const errors = validate(merged);
+        if (Object.keys(errors).length) { failures.push({ line: row.line, errors }); continue; }
+        try {
+          db.update(current.id, merged);
+          updated++;
+        } catch (err) {
+          failures.push({ line: row.line, error: String(err.message) });
+        }
+        continue;
+      }
+
+      if (!row.ok) { failures.push({ line: row.line, errors: row.errors }); continue; }
+
+      try {
+        db.create(row.data);
+        created++;
+      } catch (err) {
+        failures.push({ line: row.line, error: String(err.message) });
+      }
+    }
+
+    res.json({
+      committed: true,
+      created,
+      updated,
+      skipped,
+      failed: failures.length,
+      failures: failures.slice(0, 50),
+      summary
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not read this file.' });
+  }
+});
 
 // Create
 app.post('/api/couriers', (req, res) => {

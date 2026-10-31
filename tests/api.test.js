@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import ExcelJS from 'exceljs';
 
 const PORT = Number(process.env.TEST_PORT || 3987);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -275,3 +276,113 @@ test('deletes a courier and its documents', async () => {
   assert.equal((await j(`/api/couriers/${id}`)).status, 404);
   assert.equal((await j(`/api/documents/${up.body.id}`)).status, 404);
 });
+
+/* ---------------------------------------------------------------- bulk import */
+
+const nid = () => String(28000000000000 + Math.floor(Math.random() * 999999));
+
+const importFile = (content, name, fields = {}) => {
+  const fd = new FormData();
+  fd.append('file', new Blob([content], { type: 'text/csv' }), name);
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  return j('/api/couriers/import', { method: 'POST', body: fd });
+};
+
+test('import preview auto-maps Arabic columns without writing', async () => {
+  const before = (await list()).length;
+  const text = [
+    'اسم المندوب\tالموبايل\tالرقم القومي\tالفرع\tنوع التوظيف\tبداية الرخصة\tانتهاء الرخصة\tالحالة',
+    `سارة مصطفى\t01099998888\t${nid()}\tفرع 1\tكامل\t2025-01-01\t2027-01-01\tقيد التوظيف`
+  ].join('\n');
+
+  const fd = new FormData();
+  fd.append('text', text);
+  const { status, body } = await j('/api/couriers/import', { method: 'POST', body: fd });
+
+  assert.equal(status, 200);
+  assert.equal(body.summary.total, 1);
+  assert.equal(body.summary.ready, 1);
+  assert.equal(body.mapping.fullName, 'اسم المندوب');
+  assert.equal(body.mapping.nationalId, 'الرقم القومي');
+  assert.equal(body.rows[0].data.branch, 'QCD1');
+  assert.equal(body.rows[0].data.employmentType, 'Full Time');
+  assert.equal(body.rows[0].data.status, 'OnBoarding');
+  assert.equal((await list()).length, before, 'preview must not write');
+});
+
+test('imports a CSV file, writes valid rows and skips duplicates', async () => {
+  const existing = (await j('/api/couriers', { method: 'POST', body: JSON.stringify(make({ fullName: 'Already Here' })) })).body;
+  const fresh = nid();
+
+  const csv = 'Name,Phone,National ID,Branch,Employment Type,License Start,License End,Status\n' +
+    `Already Here,${existing.phone},${existing.nationalId},QCD1,Full Time,2026-01-01,2028-01-01,Active\n` +
+    `Imported Person,01077776666,${fresh},QCD2,Part Time,2025-05-05,2027-05-05,Active\n`;
+
+  const { status, body } = await importFile(csv, 'couriers.csv', { mode: 'commit' });
+  assert.equal(status, 200);
+  assert.equal(body.created, 1);
+  assert.equal(body.skipped, 1);
+
+  const stored = await j(`/api/couriers?q=${encodeURIComponent('Imported Person')}`);
+  assert.equal(stored.body.total, 1);
+  assert.equal(stored.body.items[0].branch, 'QCD2');
+  assert.equal(stored.body.items[0].phone, '01077776666');
+});
+
+test('reports malformed rows instead of writing them', async () => {
+  const csv = 'Name,Phone,National ID,Branch,Type,License Start,License End,Status\n' +
+    `Broken Phone,12345,${nid()},QCD1,Full Time,2026-01-01,2028-01-01,Active\n`;
+
+  const { status, body } = await importFile(csv, 'bad.csv', { mode: 'commit' });
+  assert.equal(status, 200);
+  assert.equal(body.created, 0);
+  assert.equal(body.failed, 1);
+  assert.ok(body.failures[0].errors.phone);
+});
+
+test('imports a real .xlsx workbook with Excel dates and numeric phones', async () => {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Couriers');
+  ws.addRow(['Full Name', 'Phone', 'National ID', 'Branch', 'Employment Type', 'License Start', 'License End', 'Status']);
+  ws.addRow(['Excel Person', 1011121314, nid(), 'QCD 1', 'Full Time',
+    new Date(Date.UTC(2024, 2, 3)), new Date(Date.UTC(2027, 2, 2)), 'Active']);
+  const buf = Buffer.from(await wb.xlsx.writeBuffer());
+
+  const fd = new FormData();
+  fd.append('file', new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'couriers.xlsx');
+  fd.append('mode', 'commit');
+  const { status, body } = await j('/api/couriers/import', { method: 'POST', body: fd });
+
+  assert.equal(status, 200);
+  assert.equal(body.created, 1);
+
+  const found = await j(`/api/couriers?q=${encodeURIComponent('Excel Person')}`);
+  const row = found.body.items[0];
+  assert.equal(row.phone, '01011121314');       // Excel dropped the leading zero
+  assert.equal(row.licenseStart, '2024-03-03'); // serial date, not a raw number
+  assert.equal(row.licenseEnd, '2027-03-02');
+});
+
+test('updateExisting refreshes a courier that is already stored', async () => {
+  const created = (await j('/api/couriers', { method: 'POST', body: JSON.stringify(make({ fullName: 'Before Import' })) })).body;
+
+  const csv = 'Name,Phone,National ID,Branch,Type,License Start,License End,Status\n' +
+    `After Import,${created.phone},${created.nationalId},QCD2,Part Time,2026-01-01,2028-01-01,Active\n`;
+
+  const { body } = await importFile(csv, 'update.csv', { mode: 'commit', updateExisting: '1' });
+  assert.equal(body.updated, 1);
+  assert.equal(body.created, 0);
+
+  const row = (await j(`/api/couriers/${created.id}`)).body;
+  assert.equal(row.fullName, 'After Import');
+  assert.equal(row.branch, 'QCD2');
+});
+
+test('rejects an empty import payload', async () => {
+  const fd = new FormData();
+  fd.append('text', '   ');
+  const { status, body } = await j('/api/couriers/import', { method: 'POST', body: fd });
+  assert.equal(status, 400);
+  assert.match(body.error, /Nothing to import/i);
+});
+

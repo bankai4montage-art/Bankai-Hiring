@@ -20,10 +20,12 @@ Bankai-Hiring/
 │       └── fonts/          # Inter + Cairo woff2 files
 ├── server.js               # Express server: static frontend + REST endpoints + uploads
 ├── db.js                   # SQLite layer (couriers, documents, status events, migrations)
+├── validate.js             # Shared field rules (the form and the importer use the same ones)
+├── importer.js             # Excel/CSV parsing, column auto-mapping and row normalisation
 ├── storage.js              # Image storage: SQLite BLOBs or S3 / Cloudflare R2
 ├── tests/
-│   ├── api.test.js         # node:test — endpoints, validation, pagination, uploads
-│   └── e2e.mjs             # Playwright smoke test (list, search, profile, upload)
+│   ├── api.test.js         # node:test — endpoints, validation, imports, uploads
+│   └── e2e.mjs             # Playwright smoke test (list, search, import, profile, upload)
 ├── build.js                # npm run build:css → compiles public/assets/styles.css
 ├── fetch-fonts.js          # npm run fetch:fonts → downloads self-hosted fonts (one-time)
 ├── package.json            # Dependencies & scripts
@@ -83,6 +85,17 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - Public domain: `bankai-hiring-production.up.railway.app`
 - Auto-deploys from the `main` branch of this repository
 
+### Importing couriers
+
+Open **Import** in the top bar (or `openImport()`), then either drop a file or paste the rows:
+
+1. **Source** — `.xlsx` / `.xlsm` / `.csv` up to 10 MB and 5,000 rows, or paste a table copied from Excel / Google Sheets. Old `.xls` files are rejected with a "save as .xlsx" hint.
+2. **Mapping** — headers are matched automatically (`الاسم`, `Name`, `رقم الموبايل`, `Phone`, …) and you can override every column. Empty cells can fall back to defaults (branch, type, status, licence dates).
+3. **Preview** — each row is marked *Ready*, *Stored* (National ID already exists) or *Fix* with the exact validation error. Nothing is written yet.
+4. **Import** — only the valid rows are inserted; tick *Refresh couriers that already exist* to update matching National IDs instead of skipping them.
+
+Values are normalised on the way in: `+20`/missing-zero phones, Arabic-Indic digits, `فرع 1` → `QCD1`, `كامل` → `Full Time`, `قيد التوظيف` → `OnBoarding`, and Excel date serials.
+
 ## 🌐 REST API
 
 | Method | Endpoint | Description |
@@ -93,6 +106,7 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 | GET | `/api/metrics` | Counts, document completeness and time-to-hire averages |
 | GET | `/api/events` | Recent status-change activity (`?limit=`) |
 | POST | `/api/couriers` | Create (full validation, 400 + field errors on failure) |
+| POST | `/api/couriers/import` | Bulk import — `file` or `text` + optional `mapping`, `defaults`, `mode=commit`, `updateExisting=1` |
 | PUT | `/api/couriers/:id` | Update a full record |
 | PATCH | `/api/couriers/:id/status` | Quick status change |
 | DELETE | `/api/couriers/:id` | Delete a record (its documents cascade) |
@@ -112,6 +126,7 @@ Deployed as the **`bankai-hiring`** service in the `reliable-trust` project:
 - **CSV export** from the toolbar or the sidebar "Export report" action.
 - **One layout** - a paged card grid (12/24/48/96 per page) with page numbers and the total count.
 - **Pagination** — server-side paging (`24` per page by default, 12/24/48/96) with page numbers and the total count.
+- **Bulk import** — drop an Excel (.xlsx) or CSV file, or paste rows straight from a sheet. Columns are auto-detected (Arabic or English), every row is previewed and validated, and existing National IDs are skipped instead of duplicated. No manual typing.
 - **Hiring insights** — a compact strip above the results: average **time-to-hire**, hired share, documents completeness and how many are still in progress.
 - **Smart Arabic search** — searching `احمد` also finds `أحمد` (letter normalisation for أ/إ/آ/ا, ى/ي, ة/ه and tashkeel).
 

@@ -17,6 +17,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
     "better-sqlite3": "^12.4.1",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "multer": "^2.5.0"
   },
